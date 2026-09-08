@@ -1,0 +1,11 @@
+
+# Don't push pdf output files.
+*.pdf
+
+# Don't save intermediate tex files.
+*.aux
+*.log
+*.dvi
+*.out
+*.toc
+
