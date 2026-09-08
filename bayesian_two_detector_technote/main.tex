@@ -1,0 +1,219 @@
+\documentclass{article}
+\usepackage{fancyvrb}
+\usepackage[left=0.75in,right=0.75in,top=1.25in,bottom=1.25in]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{lineno}
+\usepackage{xcolor}
+
+\title{Technote: Bayesian two-detector inference}
+\author{Cullen Sullivan}
+\date{\today}
+
+\linenumbers
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction (TODO)}
+
+\tableofcontents
+
+\section{Motivation (TODO)}
+
+\section{Language quick reference}
+\subsection{Bayesian jargon (TODO)}
+
+\subsection{Cookbooks and recipes}
+Some intentional choices are made regarding names of key structures in the two-detector framework. Unfortunately, "sample" is an overloaded keyword (MCMC sample and counting experiment sub-sample). The solution to disambiguate the ideas in this implementation is to chose a completely different name for sub-samples and explicitly denote MCMC samples as MCMC. We have chosen the following (cute) convention:
+\begin{itemize}
+    \item A \textbf{Recipe} is a counting experiment sub-sample. In the implementation, a Recipe is fully specified, i.e. it knows what dataset(s) it's loaded from, its selection, its kinematic axes, and how its fake data universe should be prepared during a fake data study.
+    \item A \textbf{Cookbook} is a set of Recipes. The Cookbook is a key analysis structure and is commonly passed around as a parameter. A cookbook is designed to indicate a complete description of how a set of counting experiment sub-samples should be prepared for performing inference.
+\end{itemize}
+
+\section{Subsample configurations (TODO)}
+
+\section{Procedures and techniques}
+
+\section{In-model (asimov) fake data studies (TODO)}
+
+\section{Implementation details}
+
+\subsection{High level structure}
+All code to execute two-detector Bayesian inference analyses lives in \href{https://github.com/novaexperiment/novasoft/tree/main/3FlavorAna/TwoDet}{\texttt{3FlavorAna/TwoDet}} in novasoft. The structure of the area is as follows:
+\begin{itemize}
+    \item \textbf{Core:} (Library) Contains structures to support a two-detector analysis. Many of the structures are designed to support concise, efficient, and flexible configuration of sub-samples for input into some inference analysis. In principle, the structures in this library could be used for an inference analysis other than the Bayesian two-detector analysis.
+    \item \textbf{Spec:} (Library) Contains structures to specify the Bayeisan two-detector inference analysis. Included are specifications to support declaring sub-samples used for this analysis and library utilities that are specific to the Bayesian analysis. For example, software that supports manipulating MCMC chains lives here.
+    \item \textbf{test:} (Macros) Contains unit tests to ensure library functions are behaving as expected.
+    \item \textbf{diagnostic:} (Macros) Contains utilities for understanding sub-samples. For example, plotting all systematic variations for all sub-samples for a cookbook in kinematic space.
+    \item \textbf{loading:} (Macros) Contains methods for loading (systematically shifted) histograms from MC/data. Is capable of loading extrapolated FD sub-samples.
+    \item \textbf{sampling:} (Macros) Contains methods for estimating the posterior for Bayesian two-detector inference using HMC with the Stan sampler. Includes methods to make warmup efficiently
+    \item \textbf{Studies:} (TODO am I keeping this area?)
+\end{itemize}
+
+\subsection{Core library documentation}
+The two-detector inference architecture relies on a consistent structure for declaring how sub-samples are configured. The primary objective of the structures of the inference analysis is to provide a log likelihood as a function of PMNS oscillation parameters and systematic variations. However, there are many valid ways to configure the sub-samples. The core structures are designed with the following implementation goals in mind:
+\begin{itemize}
+    \item We would like the log likelihood query to be runtime efficient as MCMC sampling is expensive. As ND 2-dimensional sub-samples contain many bins over many systematic variations, the memory overhead of loading sub-samples is large. We would like to minimize memory overhead as much as possible.
+    \item As loading sub-samples from MC is time-consuming and tedious, we would like to re-use sub-samples between analyses.
+    \item We would like the log likelihood query to be thread-safe so that we can run multiple MCMC chains in parallel.
+    \item We would like to be able to reconfigure sub-samples easily as we learn how best to express the ND in a two-detector analysis.
+    \item We would like expression of configuration of sub-samples to be concise. Choice of what sub-samples are included, selection, kinematic axes, MC dataset, what systematics are enabled, and how a fake data study is prepared are all things we would like to tune but together cause a combinatorial explosion of possible configurations.
+\end{itemize}
+
+Two-detector library code lives in the \texttt{twodet} namespace.
+
+\textbf{Primary structures:} The core data structures represent configurations of sub-samples and how we collect them to perform inference.
+\begin{itemize}
+    \item The \texttt{FinalState} is a unique tag for a sub-sample without any specification as to how it's configured. It also contains enumerated metadata about what detector it's for, the horn current, and what neutrino type it's targeting (numu or nue). An example of a \texttt{FinalState} in the \texttt{Spec} library is \texttt{FD\_NueHighPID\_fhc} (the FD FHC high PID nue sample without pT quants) or \texttt{ND\_MuPiEtc\_rhc} (the ND RHC mu+pi+else topological sample). Short names for final states are typically used for plot output filepaths. \texttt{FinalStates} are registered with \texttt{ana::Registry<FinalState>}.
+    \item The \texttt{Recipe} is a structure that indicates completely how a \texttt{FinalState} is configured in a particular analysis. It wraps a single \texttt{FinalState} and includes kinematic axes, a selection, and a production. It includes a \texttt{IDiskReader} which is used to find ROOT files containing MC, data, and cosmic spectra. \texttt{Recipe}s are typically constructed on-the-fly during the start of a program with a \texttt{Cookbook} constructor, but they can also be constructed manually (See \texttt{Recipe::Factory}). \texttt{Recipe}s internally lazily load and cache NuMI prediction objects, NuMI data spectra, and cosmic predictions. \texttt{Recipe}s integrate with \texttt{Cookbooks} using the \texttt{RecipeProxy} wrapper which reference counts \texttt{Recipe} objects allowing identical predictions or data spectra to be only loaded into memory once.
+    \item The \texttt{Cookbook} is a high-level structure which acts as a collection (set) of \texttt{Recipe}s. It inherits from \texttt{std::list}, and \texttt{RecipeProxy} knows how to implicitly convert to \texttt{const Recipe\&}, so cookbooks can be iterated over as \texttt{for ( const Recipe\& recipe : cookbook ) \{ <do things per recipe> \}}. Cookbooks have short names and are unique (belong with \texttt{ana::Registry<Cookbook>}). Cookbooks can be declared in read-only memory and looked up later using the registry or constructed on-the-fly during program startup (as in the Bayesian specification). The primary method of indicating how sub-samples are prepared is to pass a cookbook (either by reference or name) to analysis code and macros.
+\end{itemize}
+
+\textbf{Supporting structures:}
+\begin{itemize}
+    \item An instance of an \texttt{IDiskReader} is responsible for retrieving NuMI predictions and data and cosmic predictions from disk. A simple disk reader simply maps \texttt{Recipe}s to filepaths where the objects live and will load the objects for convenience. In the Bayesian two-detector implementation, however, some fake data studies are implemented on-the-fly with specialized disk readers. For example, a valid fake data study is to use the nominal systematic prediction rather than the NuMI data spectrum. Rather than save many nominal predictions on disk and need to do bookkeeping for them, we instead use a specialized disk reader that loads the NuMI prediction and uses it to return the nominal prediction. (See Section \ref{sec:Nuances_with_loading_extrapolated_samples} for details about how this is done with extrapolation.) The same is done with fake data studies with systematic variations.
+    \item A \texttt{SystPolicy} is a sort of promotion of a list of systematics. As different recipes can have different systematics enabled at a time (for example, FD calibration is only defined for FD samples, not ND), using a single list of systematics for an entire cookbook is cumbersome, inappropriate, and inefficient. Instead, the \texttt{SystPolicy} defines a mapping (using \texttt{operator()}) \texttt{Recipe -> <list of systematics>}. Systematic policies are named and unique, allowing their names to be passed easily as arguments to analysis macros to declare what families of systematics should be used for a study. Systematic policies are typically passed through analysis code to decide what systematics are enabled for fake data studies with systematic variations.
+    \item Kinematic axes and selections for recipes are declared using the \texttt{IAxisGetter} and \texttt{ISelectionGetter} interfaces. Recipes can be constructed using \texttt{ana::HistAxis} and \texttt{ana::Cut} objects directly, but statically initialized recipes can load out-of-order from dictionaries of axes and cuts causing startup crashes. Although the syntax is cumbersome, the getter functions are provided as an alternative. The getter functions implement a mapping \texttt{FinalState -> axis/cut} and are named and registered with \texttt{ana::Registry}. This enables making abstract statements in cookbook configuration like "load all ND samples using Q3Q0 binning."
+\end{itemize}
+
+\subsection{Bayesian specification library structures}
+\label{sec:bayesian-specification-library-structures}
+\textbf{Specifications supporting cookbooks:} The area contains the specifications for the Bayesian two-detector analysis:
+\begin{itemize}
+    \item \textbf{Kinematic axis} getters and bin edges are defined in \texttt{Axes.h/cxx}. The getters will look up the bin edges from dictionaries in the same file depending on the neutrino type. These axis getters also affect the selection with phase space cuts with an integration with selection getters. As of the writing of this note, there is only one way to configure FD axes (the same as official 3F extrapolation analyses), so the Bayesian specification hardcodes those axes for the FD and allows configuring ND axes. This could always be changed if different expressions of the FD are desired.
+    \item \textbf{Selection} getters and definitions are defined in \texttt{Cuts.h/cxx}. Selection getters require an axis getter as an argument to query phase space cuts. As of the writing of this note, only prongCVN cuts are supported for the ND and the official event CVN selection are supported for the FD. This will likely change in the future, but for now, all analyses are assumed to share these selections. For conciseness, cookbook tags omit specification of the selections for now.
+    \item \textbf{Disk reader} instances exist in \texttt{DiskReaders.h/cxx} and point to where analysis files live in Cullen's working areas on \texttt{/pnfs} and on the Tufts Cluster. A user other than Cullen probably wants to change these.
+\end{itemize}
+
+\textbf{Cookbooks} are not statically initialized in read only memory but are instead constructed on the fly using the tag parser implemented in \texttt{CookbookParsing.h/cxx}. The purpose of the parser is to take in an instance of the "cookbook-parsable-name-format" and return a Cookbook. The parsable name should completely define how the cookbook is to be prepared, and responsibility is designated to sub-parsers to avoid the combinatorial explosion problem of many different ways to define cookbooks. In analysis macros, the parsable name is used frequently to tag the specification of your analysis by informing input and output filepaths.
+
+The \textbf{cookbook-parsable-name-format} is specified as follows:
+\begin{Verbatim}[commandchars=\\\{\}]
+    \textcolor{blue}{prod}\_\textcolor{red}{enabled-final-states}\_\textcolor{green}{ND-binning}\_\textcolor{orange}{disk-reader}
+\end{Verbatim}
+Sub parsers behave as follows:
+\begin{itemize}
+    \item \textcolor{blue}{prod}: Defines what production to use for the analysis. Performs a reverse map search of \texttt{NAMES\_BY\_PROD} (\texttt{Core/Recipe.h}), so expect either "prod51", "miniprod61", or "prod6".
+    \item \textcolor{red}{enabled-final-states}: Defines what final states are used in constructing the cookbook. The format is further split by detector. Expect one of the following:
+    \begin{enumerate}
+        \item nd\textcolor{purple}{enabled-ND-final-states}: Use these final states for the ND and nothing for the FD.
+        \item fd\textcolor{purple}{enabled-FD-final-states}: Use these final states for the FD and nothing fot the ND.
+        \item nd\textcolor{purple}{enabled-ND-final-states}fd\textcolor{purple}{enabled-FD-final-states}: Use these final states for the ND and FD.
+    \end{enumerate}
+    \textcolor{purple}{enabled-ND-final-states} and \textcolor{purple}{enabled-FD-final-states} are keys of \texttt{ENABLED\_ND\_FINAL\_STATES\_BY\_NAME} and \texttt{ENABLED\_FD\_FINAL\_STATES\_BY\_NAME} respectively in \texttt{Spec/FinalStates.h/cxx}.
+    \item \textcolor{green}{ND-binning}: Defines what axis getter will be used to construct all ND recipes. Pass as a name of a member of \texttt{ana::Registry<IAxisGetter>}.
+    \item \textcolor{orange}{disk-reader}: Defines what disk reader will be used to construct all recipes. Use this tag to specify the fake data study universe. The algorithm to parse the disk reader sub-tag is as follows:
+    \begin{enumerate}
+        \item If \textcolor{orange}{disk-reader} is an exact match for a member of \texttt{ana::Registry<IDiskReader>}, return that.
+        \item If \textcolor{orange}{disk-reader} matches \textcolor{magenta}{tag}Poisson\textcolor{cyan}{number}, return the result of the algorithm on \textcolor{magenta}{tag} wrapped by a \texttt{FakePoisson} reader with random variation seed \textcolor{cyan}{number}.
+        \item If \textcolor{orange}{disk-reader} matches \textcolor{magenta}{tag}FakeRand\textcolor{cyan}{number}, return the result of the algorithm on \textcolor{magenta}{tag} wrapped by a \texttt{FakeRandomShifts} with random variation seed \textcolor{cyan}{number} and shifts clamped to [-1,+1].
+        \item If \textcolor{orange}{disk-reader} matches \textcolor{magenta}{tag}Fake, return the result of the algorithm on \textcolor{magenta}{tag} wrapped with a \texttt{FakeNoShifts}.
+        \item Otherwise, report failure to parse.
+    \end{enumerate}
+\end{itemize}
+If any sub-parser fails, the cookbook parsing will fail and report which sub-parsers failed. Some examples:
+\begin{itemize}
+    \item \texttt{prod51\_ndTopological\_Q3Q0\_nom} means "Use production 5.1, ND numu and nue topological samples in Q3Q0 space, no FD samples, and the nominal prediction with real ND NuMI data." (ND-only real data analysis.)
+    \item \texttt{prod51\_fdEhadQuants\_OfficialFD\_nomFake} means "Use production 5.1, no ND samples, FD samples in numu Ehad quantiles and all nue samples, use official FD binning, and generate fake data using the nominal prediction." (FD-only no-extrap nominal fake data study).
+    \item \texttt{prod51\_ndTopologicalfdEhadQuants\_NumuQ3Q0NueThetaLepE\_nomFakeRand0} means "Use production 5.1, ND numu and nue topological samples, FD samples in numu Ehad quantiles and all nue samples, ND numu samples in Q3Q0 space, ND nue samples in theta/electron energy space, FD with official binning, and generate fake data on-the-fly with the NuMI prediction (and cosmic data) with random systematic variation seed set to 0." (Two-detector in-model systematic variation fake data study.)
+    \item \texttt{prod51\_ndEhadQuants\_NuEnergyND\_minervamec} means "Use production 5.1, ND numu and nue topological samples in 1D neutrino reconstructed energy sapace, no FD samples, and the disk reader called 'minervamec' which would use filepaths to load nominal predictions but data spectra prepared with MINERvA MEC weights." (ND-only out-of-systematic-model fake data study.)
+    \item \texttt{prod51\_fdEhadQuants\_OfficialFD\_nomExtrapIJFakeRand0} means "Use production 5.1, no ND samples (explicitly in log likelihood query), FD samples in numu Ehad quantiles and all nue samples, use official FD binning, and generate fake data on-the-fly with random systematic variation seed set to 0 using the extrapolated predictions that have had their ND data Indiana-Jones-style swapped (to fake data with random variations with seed 0)." (Extrapolated in-model systematic variation fake data study.)
+\end{itemize}
+
+\textbf{Bookkeeping of extrapolated FD samples:} Bayesian two-detector FD samples are not extrapolated, but one of the primary objectives of the analysis is to understand in what ways Bayesian two-detector performs differently from extrapolation. Rather than run official 3F code in parallel with new two-detector code (different structures, shapes of samples, analysis macros, etc), we have instead reproduced the extrapolation analysis as closely as possible in the two-detector framework expressed as \texttt{FinalState}s, \texttt{Recipe}s, and \texttt{Cookbook}s. This way, the extrapolation analysis is simply a limiting case of a two-detector analysis in which only the FD is active with specialized samples. Then, we can pass an extrapolated analysis around on equal footing to a two-detector analysis which is extremely convenient for apples-to-apples comparisons.
+
+To extrapolate FD samples, we must associate each FD sample to some ND samples. See Section \ref{sec:Nuances_with_loading_extrapolated_samples} for details. The core library contains structures to assist in preparing the extrapolated samples. \texttt{Spec/Quantiles.h} contains specialized \texttt{FinalState} objects which represent Ehad and pT quantiles for use in preparing ND and FD samples for extrapolation. \texttt{Spec/CAFLoading.h} contains utilities which associate FD extrapolated final states to the corresponding ND final states used for extrapolation.
+
+\subsection{MCMC sampling structure (TODO move fitter tech/metadata structures to new Sampling.h/cxx)}
+
+\subsection{MCMC marginalization}
+In extrapolation analyses, the systematic subspace of the posterior is not very informative as to what the systematic model is doing because extrapolated predictions often behave such that systematics are driven by the prior. Bayesian two-detector is different, however, in that the systematic subspace of the posterior is highly informative as to the result of the analysis. However, with more than 100 systematic parameters, efficient marginalization of high statistics MCMC chains is necessary. The Bayesian two-detector analysis uses \texttt{ana::BayesianMarginalDeck} to compute all marginals in one (or a few) pass(es) of the MCMC chain(s). \texttt{Marginalization.h/cxx} provides extra support for computing marginals:
+\begin{itemize}
+    \item Extracting the true value of a parameter from sampling metadata for plotting.
+    \item Unified definitions of selections on mass ordering, octant, etc.
+    \item Default binnings for oscillation parameters and transforms.
+    \item Automatic on-the-fly calculation of histogram limits for systematic parameters. Systematic constraints are widely varied, and hardcoding expected constraints for all systematic constraints would be an enormous headache - on-the-fly calculation solves this problem at the expense of a quick pass of the MCMC samples before main marginalization.
+    \item A method to compute the normal ordering/inverted ordering preference for a chain.
+    \item The \texttt{Marginals} structure (with \texttt{MarginalCtx<>}) supports a \texttt{ana::BayesianMarginalDeck} by associating metadata with the marginal itself. This supports a marginalization-plotting thought-flow like "register all the marginals like this with these names, compute, then plot all the 1D like this and save with the names, then plot all the 2D like this and save with the names, then...".
+\end{itemize}
+\texttt{Transforms.h/cxx} include \texttt{ana::SampleTransform}s for transforming PMNS parameters from raw angles.
+
+\subsection{The plotting library (TODO this is still under construction)}
+
+\section{How-to: Step-by-step instructions to perform an inference analysis}
+This section will walk you through how to a perform a Bayesian two-detector inference analysis starting from the CAFs and ending at marginal distributions of the posterior. As an example, we will extract the posterior for a two-detector randomly systematically varied fake data study at asimov A using ND numu samples in Q3Q0 space and ND nue samples in ThetaLepE space using the 2024 two-detector list of systematics. The analysis cookbook for this configuration is:
+\begin{verbatim}
+    prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0
+\end{verbatim}
+
+The primary task scheduler used for this analysis is slurm (most of this is run on the Tufts cluster). All of these macros can be minimally modified to function with fermigrid, but some macros only have slurm submitters. Fermigrid submission macros can also be written.
+
+\subsection{Loading nominal non-extrapolated MC - an intro to macro patterns}
+The first concrete step of an inference analysis is to choose and understand the sub-samples you intend to use. In the two-detector implementation language, this is writing your cookbook! Every recipe in your cookbook needs to have all of the ingredients! You will need to chose a set of final states to enable. You will need to specify a concrete \texttt{IAxisGetter}, \texttt{ISelectionGetter}, and \texttt{IDiskReader}. You can specify a single cookbook in static memory like:
+\begin{verbatim}
+const Cookbook("your_cookbook_internal_name","latex-formatted name",
+               ProdType::kMyProduction,
+               kMyAxisGetter, kMySelectionGetter, kMyDiskReader,
+               { kFS1, kFS2, ... });
+\end{verbatim}
+or if you intend to compare many configurations of cookbooks, consider instead using the cookbook-parsable-name-format (Section \ref{sec:bayesian-specification-library-structures}). Rather than define the cookbook itself in static memory, you can define each of the ingredients for runtime-lookup.
+
+To diagnose the basic characteristics of your cookbook in a cheap manner, see \texttt{diagnostic/{Load}{Plot}NominalPredictions.C}. Loading systematic variations from CAFs is a computationally expensive procedure, so ensure that all of the sub-samples look sensible before trying to load systematic variations.
+
+Like many macros in the two-detector framework, the only (or most important) argument is a cookbook. These macros are configured to accept a cookbook name (failure to parse will cause an abort sequence). As with other macros whose style is "do something for every recipe/final state" the macros will create outputs whose names are informed by the cookbook short name and final state or recipe short names.
+
+\subsection{Loading systematically shifted non-extrapolated MC}
+This step is expensive, so be mindful that your samples will behave as you expect before trying to load all systematic variations.
+
+Systematics that can be computed through reweights are loaded using \texttt{loading/LoadReweightablePredictions.C} which is capable of loading both non-extrapolated and extrapolated FD predictions and ND predictions. Loading a \texttt{ana::PredictionInterp} directly is computationally intractable, so instead, this macro loads individual systematic variation predictions by groups. Definitions and names of systematic groups are defined in \texttt{Spec/Systs202X.h}. The idea is that for every final state, separately load batches of systematically shifted predictions such that the union of systematic variation predictions can be postprocessed into an \texttt{ana::PredictionInterp}.
+
+\texttt{LoadReweightablePredictions.C} accepts a cookbook as a parameter so that it can load similar recipes simultaneously. (If we're iterating over ND FHC numu concats, we may as well load all of the ND FHC numu samples!) Over many systematic variations (particularly for FD predictions), this can be computationally expensive when loading many samples. For this reason, it's suggested not to use a complicated analysis cookbook for loading predictions and instead to split up recipes into smaller cookbooks. For example, our analysis cookbook can be split into smaller sets of final states as:
+\begin{itemize}
+    \item \texttt{prod51\_ndNumuFHCTopological\_Q3Q0\_nom} (All ND FHC numu in Q3Q0 space)
+    \item \texttt{prod51\_ndNumuRHCTopological\_Q3Q0\_nom} (All ND RHC numu in Q3Q0 space)
+    \item \texttt{prod51\_ndNueTopological\_ThetaLepE\_nom} (All ND nue in ThetaLepE space)
+    \item \texttt{prod51\_fdFHCEhadQuants\_OfficialFD\_nom} (All FD FHC in reco nue space)
+    \item \texttt{prod51\_fdRHCEhadQuants\_OfficialFD\_nom} (All FD RHC in reco nue space)
+\end{itemize}
+These cookbooks are chosen such that the union of samples compose the analysis cookbook. Splitting up the cookbooks also has the added advantage that a localized problem only requires a small respin, not a total respin over all recipes. Notice that the disk reader is \texttt{nom} and not \texttt{nomFake} because we do not need any mechanism to generate fake data on-the-fly during the prediction-loading step. \texttt{LoadReweightablePredictions.C} delegates most of the work to the unified prediction factory, \texttt{MakePrediction}, which is a switcher for making non-extrapolated and extrapolated FD predictions.
+
+File-based systematic variations are loaded using \texttt{LoadFileBasedPredictions.C} on Fermigrid. It encodes the mapping of systematic name and sigma to a file-based loader. Predictions for detector calibration are loaded uncorrelated, then after spectra are loaded, the correlated and anticorrelated predictions are saved to file too.
+
+\subsection{Post-processing systematically shifted non-extrapolated MC}
+Minimal post-processing first involves merging the outputs using something like \texttt{hadd\_cafana}. However, managing the sheer number of sub-predictions alone is challenging. \texttt{TwoDet/shell\_functions.sh} contain terminal-level bash functions to assist in finding problems with grid outputs and with merging them. To find small files (which are indicated by smaller file size than successful jobs), use \texttt{get\_bad\_output}. As an example,
+\begin{verbatim}
+get_bad_output 5000 beam/*.root
+\end{verbatim}
+will search for failed outputs in the \texttt{beam} subdirectory and report which files failed. You can delete these files. To automate this over all systematic group subdirectories:
+\begin{verbatim}
+for subdir in `ls .`; do echo $subdir; get_bad_output 5000 $subdir/*.root; done
+\end{verbatim}
+Then, to find which files are missing over all systematic group subdirectories:
+\begin{verbatim}
+for subdir in `ls .`; do echo $subdir; find_missing_output $subdir/*.root; done
+\end{verbatim}
+This method will find failure modes both from interrupted ROOT output (crash causing \texttt{TFile} to be a zombie) and from ROOT output never started (crash before job finishes).
+
+Once you've gathered an acceptable number of output jobs, use \texttt{merge\_grid\_outputs} to merge individual job outputs for every systematic group:
+\begin{verbatim}
+for subdir in `ls .`; do echo $subdir; merge_grid_outputs (YOUR DESTINATION DIRECTORY)/$subdir/ $subdir/*.root; done
+\end{verbatim}
+If you are on a cluster supporting slurm and merging is taking forever, the CAFAna macro, \texttt{loading/MergeGridOutputsParallel.C} will instead accept a cookbook to inform what recipe names to look for and will output a command script that will submit batches of jobs to slurm that each parallelize some of the grid outputs.
+
+Then, the outputs split by systematic group need to be merged into an \texttt{ana::PredictionInterp}. The CAFAna macro, \texttt{loading/MergeIntoPredictionInterp.C} will do this given a cookbook and your input directory (whatever you called "(YOUR DESTINATION DIRECTORY)" during the output merging step). The macro will automatically save the merged \texttt{ana::PredictionInterp} objects to whatever filepaths the recipe's disk readers will use for analysis. On a slurm cluster, you can use \texttt{loading/MergeIntoPredictionInterpParallel.C} to instead write slurm commands to execute this step in parallel.
+
+To query what your new systematically-shifted samples look like, use \texttt{diagnositc/PlotSystPulls.C} to plot $+1\sigma$ and $-1\sigma$ variations for every systematic you loaded for every recipe.
+
+\subsection{Nuances with loading extrapolated samples}
+\label{sec:Nuances_with_loading_extrapolated_samples}
+
+\subsection{Additional post-processing for extrapolated samples}
+
+\subsection{Loading NuMI data}
+
+\subsection{Loading cosmic predictions}
+
+\end{document}
+
