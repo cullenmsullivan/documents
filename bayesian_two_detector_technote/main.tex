@@ -68,7 +68,11 @@ Two-detector library code lives in the \texttt{twodet} namespace.
 \begin{itemize}
     \item The \texttt{FinalState} is a unique tag for a sub-sample without any specification as to how it's configured. It also contains enumerated metadata about what detector it's for, the horn current, and what neutrino type it's targeting (numu or nue). An example of a \texttt{FinalState} in the \texttt{Spec} library is \texttt{FD\_NueHighPID\_fhc} (the FD FHC high PID nue sample without pT quants) or \texttt{ND\_MuPiEtc\_rhc} (the ND RHC mu+pi+else topological sample). Short names for final states are typically used for plot output filepaths. \texttt{FinalStates} are registered with \texttt{ana::Registry<FinalState>}.
     \item The \texttt{Recipe} is a structure that indicates completely how a \texttt{FinalState} is configured in a particular analysis. It wraps a single \texttt{FinalState} and includes kinematic axes, a selection, and a production. It includes a \texttt{IDiskReader} which is used to find ROOT files containing MC, data, and cosmic spectra. \texttt{Recipe}s are typically constructed on-the-fly during the start of a program with a \texttt{Cookbook} constructor, but they can also be constructed manually (See \texttt{Recipe::Factory}). \texttt{Recipe}s internally lazily load and cache NuMI prediction objects, NuMI data spectra, and cosmic predictions. \texttt{Recipe}s integrate with \texttt{Cookbooks} using the \texttt{RecipeProxy} wrapper which reference counts \texttt{Recipe} objects allowing identical predictions or data spectra to be only loaded into memory once.
-    \item The \texttt{Cookbook} is a high-level structure which acts as a collection (set) of \texttt{Recipe}s. It inherits from \texttt{std::list}, and \texttt{RecipeProxy} knows how to implicitly convert to \texttt{const Recipe\&}, so cookbooks can be iterated over as \texttt{for ( const Recipe\& recipe : cookbook ) \{ <do things per recipe> \}}. Cookbooks have short names and are unique (belong with \texttt{ana::Registry<Cookbook>}). Cookbooks can be declared in read-only memory and looked up later using the registry or constructed on-the-fly during program startup (as in the Bayesian specification). The primary method of indicating how sub-samples are prepared is to pass a cookbook (either by reference or name) to analysis code and macros.
+    \item The \texttt{Cookbook} is a high-level structure which acts as a collection (set) of \texttt{Recipe}s. It inherits from \texttt{std::list}, and \texttt{RecipeProxy} knows how to implicitly convert to \texttt{const Recipe\&}, so cookbooks can be iterated over as
+\begin{verbatim}
+  for ( const Recipe\& recipe : cookbook ) { <do things per recipe> }}
+\end{verbatim}
+      Cookbooks have short names and are unique (belong with \texttt{ana::Registry<Cookbook>}). Cookbooks can be declared in read-only memory and looked up later using the registry or constructed on-the-fly during program startup (as in the Bayesian specification). The primary method of indicating how sub-samples are prepared is to pass a cookbook (either by reference or name) to analysis code and macros.
 \end{itemize}
 
 \textbf{Supporting structures:}
@@ -84,7 +88,7 @@ Two-detector library code lives in the \texttt{twodet} namespace.
 \begin{itemize}
     \item \textbf{Kinematic axis} getters and bin edges are defined in \texttt{Axes.h/cxx}. The getters will look up the bin edges from dictionaries in the same file depending on the neutrino type. These axis getters also affect the selection with phase space cuts with an integration with selection getters. As of the writing of this note, there is only one way to configure FD axes (the same as official 3F extrapolation analyses), so the Bayesian specification hardcodes those axes for the FD and allows configuring ND axes. This could always be changed if different expressions of the FD are desired.
     \item \textbf{Selection} getters and definitions are defined in \texttt{Cuts.h/cxx}. Selection getters require an axis getter as an argument to query phase space cuts. As of the writing of this note, only prongCVN cuts are supported for the ND and the official event CVN selection are supported for the FD. This will likely change in the future, but for now, all analyses are assumed to share these selections. For conciseness, cookbook tags omit specification of the selections for now.
-    \item \textbf{Disk reader} instances exist in \texttt{DiskReaders.h/cxx} and point to where analysis files live in Cullen's working areas on \texttt{/pnfs} and on the Tufts Cluster. A user other than Cullen probably wants to change these.
+    \item \textbf{Disk reader} instances exist in \texttt{Disk\-Readers\-.h/cxx} and point to where analysis files live in Cullen's working areas on \texttt{/pnfs} and on the Tufts Cluster. A user other than Cullen probably wants to change these.
 \end{itemize}
 
 \textbf{Cookbooks} are not statically initialized in read only memory but are instead constructed on the fly using the tag parser implemented in \texttt{CookbookParsing.h/cxx}. The purpose of the parser is to take in an instance of the "cookbook-parsable-name-format" and return a Cookbook. The parsable name should completely define how the cookbook is to be prepared, and responsibility is designated to sub-parsers to avoid the combinatorial explosion problem of many different ways to define cookbooks. In analysis macros, the parsable name is used frequently to tag the specification of your analysis by informing input and output filepaths.
@@ -95,21 +99,21 @@ The \textbf{cookbook-parsable-name-format} is specified as follows:
 \end{Verbatim}
 Sub parsers behave as follows:
 \begin{itemize}
-    \item \textcolor{blue}{prod}: Defines what production to use for the analysis. Performs a reverse map search of \texttt{NAMES\_BY\_PROD} (\texttt{Core/Recipe.h}), so expect either "prod51", "miniprod61", or "prod6".
+    \item \textcolor{blue}{prod}: Defines what production to use for the analysis. Performs a reverse map search of \texttt{NAMES\_\-BY\_\-PROD} (\texttt{Core/\-Recipe.h}), so expect either "prod51", "miniprod61", or "prod6".
     \item \textcolor{red}{enabled-final-states}: Defines what final states are used in constructing the cookbook. The format is further split by detector. Expect one of the following:
     \begin{enumerate}
         \item nd\textcolor{purple}{enabled-ND-final-states}: Use these final states for the ND and nothing for the FD.
         \item fd\textcolor{purple}{enabled-FD-final-states}: Use these final states for the FD and nothing fot the ND.
         \item nd\textcolor{purple}{enabled-ND-final-states}fd\textcolor{purple}{enabled-FD-final-states}: Use these final states for the ND and FD.
     \end{enumerate}
-    \textcolor{purple}{enabled-ND-final-states} and \textcolor{purple}{enabled-FD-final-states} are keys of \texttt{ENABLED\_ND\_FINAL\_STATES\_BY\_NAME} and \texttt{ENABLED\_FD\_FINAL\_STATES\_BY\_NAME} respectively in \texttt{Spec/FinalStates.h/cxx}.
+    \textcolor{purple}{enabled-ND-final-states} and \textcolor{purple}{enabled-FD-final-states} are keys of \texttt{ENABLED\_\-ND\_\-FINAL\_\-STATES\_\-BY\_\-NAME} and \\\texttt{ENABLED\_\-FD\_\-FINAL\_\-STATES\_\-BY\_\-NAME} respectively in \texttt{Spec/\-FinalStates\-.h/cxx}.
     \item \textcolor{green}{ND-binning}: Defines what axis getter will be used to construct all ND recipes. Pass as a name of a member of \texttt{ana::Registry<IAxisGetter>}.
     \item \textcolor{orange}{disk-reader}: Defines what disk reader will be used to construct all recipes. Use this tag to specify the fake data study universe. The algorithm to parse the disk reader sub-tag is as follows:
     \begin{enumerate}
         \item If \textcolor{orange}{disk-reader} is an exact match for a member of \texttt{ana::Registry<IDiskReader>}, return that.
-        \item If \textcolor{orange}{disk-reader} matches \textcolor{magenta}{tag}Poisson\textcolor{cyan}{number}, return the result of the algorithm on \textcolor{magenta}{tag} wrapped by a \texttt{FakePoisson} reader with random variation seed \textcolor{cyan}{number}.
-        \item If \textcolor{orange}{disk-reader} matches \textcolor{magenta}{tag}FakeRand\textcolor{cyan}{number}, return the result of the algorithm on \textcolor{magenta}{tag} wrapped by a \texttt{FakeRandomShifts} with random variation seed \textcolor{cyan}{number} and shifts clamped to [-1,+1].
-        \item If \textcolor{orange}{disk-reader} matches \textcolor{magenta}{tag}Fake, return the result of the algorithm on \textcolor{magenta}{tag} wrapped with a \texttt{FakeNoShifts}.
+        \item If \textcolor{orange}{disk-reader} matches \textcolor{magenta}{tag}Poisson\textcolor{cyan}{number}, return the result of the algorithm on \textcolor{magenta}{tag} wrapped by a\\ \texttt{Fake\-Poisson} reader with random variation seed \textcolor{cyan}{number}.
+        \item If \textcolor{orange}{disk-reader} matches \textcolor{magenta}{tag}FakeRand\textcolor{cyan}{number}, return the result of the algorithm on \textcolor{magenta}{tag} wrapped by a \texttt{Fake\-Random\-Shifts} with random variation seed \textcolor{cyan}{number} and shifts clamped to [-1,+1].
+        \item If \textcolor{orange}{disk-reader} matches \textcolor{magenta}{tag}Fake, return the result of the algorithm on \textcolor{magenta}{tag} wrapped with a \texttt{Fake\-No\-Shifts}.
         \item Otherwise, report failure to parse.
     \end{enumerate}
 \end{itemize}
@@ -142,13 +146,13 @@ In extrapolation analyses, the systematic subspace of the posterior is not very 
 
 \subsection{The plotting library (TODO this is still under construction)}
 
-\section{How-to: Step-by-step instructions to perform an inference analysis}
+\section{How-to: Step-by-step instructions to perform an inference analysis (TODO include plots step-by-step to show diagnostic outputs)}
 This section will walk you through how to a perform a Bayesian two-detector inference analysis starting from the CAFs and ending at marginal distributions of the posterior. As an example, we will extract the posterior for a two-detector randomly systematically varied fake data study at asimov A using ND numu samples in Q3Q0 space and ND nue samples in ThetaLepE space using the 2024 two-detector list of systematics. The analysis cookbook for this configuration is:
 \begin{verbatim}
     prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0
 \end{verbatim}
 
-The primary task scheduler used for this analysis is slurm (most of this is run on the Tufts cluster). All of these macros can be minimally modified to function with fermigrid, but some macros only have slurm submitters. Fermigrid submission macros can also be written.
+The primary task scheduler used for this analysis is slurm (most of this is run on the Tufts cluster). Slurm submitter macros have the file format \texttt{cluster\_<name>}. All of these macros can be minimally modified to function with fermigrid, but some macros only have slurm submitters. Fermigrid submission macros can also be written.
 
 \subsection{Loading nominal non-extrapolated MC - an intro to macro patterns}
 The first concrete step of an inference analysis is to choose and understand the sub-samples you intend to use. In the two-detector implementation language, this is writing your cookbook! Every recipe in your cookbook needs to have all of the ingredients! You will need to chose a set of final states to enable. You will need to specify a concrete \texttt{IAxisGetter}, \texttt{ISelectionGetter}, and \texttt{IDiskReader}. You can specify a single cookbook in static memory like:
@@ -160,14 +164,17 @@ const Cookbook("your_cookbook_internal_name","latex-formatted name",
 \end{verbatim}
 or if you intend to compare many configurations of cookbooks, consider instead using the cookbook-parsable-name-format (Section \ref{sec:bayesian-specification-library-structures}). Rather than define the cookbook itself in static memory, you can define each of the ingredients for runtime-lookup.
 
-To diagnose the basic characteristics of your cookbook in a cheap manner, see \texttt{diagnostic/{Load}{Plot}NominalPredictions.C}. Loading systematic variations from CAFs is a computationally expensive procedure, so ensure that all of the sub-samples look sensible before trying to load systematic variations.
+To diagnose the basic characteristics of your cookbook in a cheap manner, see \texttt{diagnostic/\-{Load}{Plot}\-Nominal\-Predictions\-.C}. Loading systematic variations from CAFs is a computationally expensive procedure, so ensure that all of the sub-samples look sensible before trying to load systematic variations.
+
+For non-extrapolated predictions, there is no purpose in loading separate pT quantiles and merging them later (the standard 3F extrapolation approach). Two-detector non-extrapolated predictions are loaded directly, and the FD nue peripheral sample is loaded as a single bin.
 
 Like many macros in the two-detector framework, the only (or most important) argument is a cookbook. These macros are configured to accept a cookbook name (failure to parse will cause an abort sequence). As with other macros whose style is "do something for every recipe/final state" the macros will create outputs whose names are informed by the cookbook short name and final state or recipe short names.
 
 \subsection{Loading systematically shifted non-extrapolated MC}
+\label{sec:loading_systematically_shifted_non_extrapolated_mc}
 This step is expensive, so be mindful that your samples will behave as you expect before trying to load all systematic variations.
 
-Systematics that can be computed through reweights are loaded using \texttt{loading/LoadReweightablePredictions.C} which is capable of loading both non-extrapolated and extrapolated FD predictions and ND predictions. Loading a \texttt{ana::PredictionInterp} directly is computationally intractable, so instead, this macro loads individual systematic variation predictions by groups. Definitions and names of systematic groups are defined in \texttt{Spec/Systs202X.h}. The idea is that for every final state, separately load batches of systematically shifted predictions such that the union of systematic variation predictions can be postprocessed into an \texttt{ana::PredictionInterp}.
+Systematics that can be computed through reweights are loaded using \texttt{loading/\-Load\-Reweightable\-Predictions\-.C} which is capable of loading both non-extrapolated and extrapolated FD predictions and ND predictions. Loading a \texttt{ana::Prediction\-Interp} directly is computationally intractable, so instead, this macro loads individual systematic variation predictions by groups. Definitions and names of systematic groups are defined in \texttt{Spec/\-Systs202X\-.h}. The idea is that for every final state, separately load batches of systematically shifted predictions such that the union of systematic variation predictions can be postprocessed into an \texttt{ana::Prediction\-Interp}.
 
 \texttt{LoadReweightablePredictions.C} accepts a cookbook as a parameter so that it can load similar recipes simultaneously. (If we're iterating over ND FHC numu concats, we may as well load all of the ND FHC numu samples!) Over many systematic variations (particularly for FD predictions), this can be computationally expensive when loading many samples. For this reason, it's suggested not to use a complicated analysis cookbook for loading predictions and instead to split up recipes into smaller cookbooks. For example, our analysis cookbook can be split into smaller sets of final states as:
 \begin{itemize}
@@ -179,10 +186,10 @@ Systematics that can be computed through reweights are loaded using \texttt{load
 \end{itemize}
 These cookbooks are chosen such that the union of samples compose the analysis cookbook. Splitting up the cookbooks also has the added advantage that a localized problem only requires a small respin, not a total respin over all recipes. Notice that the disk reader is \texttt{nom} and not \texttt{nomFake} because we do not need any mechanism to generate fake data on-the-fly during the prediction-loading step. \texttt{LoadReweightablePredictions.C} delegates most of the work to the unified prediction factory, \texttt{MakePrediction}, which is a switcher for making non-extrapolated and extrapolated FD predictions.
 
-File-based systematic variations are loaded using \texttt{LoadFileBasedPredictions.C} on Fermigrid. It encodes the mapping of systematic name and sigma to a file-based loader. Predictions for detector calibration are loaded uncorrelated, then after spectra are loaded, the correlated and anticorrelated predictions are saved to file too.
+File-based systematic variations are loaded using \texttt{Load\-File\-Based\-Predictions\-.C} on Fermigrid. It encodes the mapping of systematic name and sigma to a file-based loader. Predictions for detector calibration are loaded uncorrelated, then after spectra are loaded, the correlated and anticorrelated predictions are saved to file too.
 
-\subsection{Post-processing systematically shifted non-extrapolated MC}
-Minimal post-processing first involves merging the outputs using something like \texttt{hadd\_cafana}. However, managing the sheer number of sub-predictions alone is challenging. \texttt{TwoDet/shell\_functions.sh} contain terminal-level bash functions to assist in finding problems with grid outputs and with merging them. To find small files (which are indicated by smaller file size than successful jobs), use \texttt{get\_bad\_output}. As an example,
+\subsection{Post-processing systematically shifted non-extrapolated MC (TODO document squashing)}
+Minimal post-processing first involves merging the outputs using something like \texttt{hadd\_cafana}. However, managing the sheer number of sub-predictions alone is challenging. \texttt{TwoDet/\-shell\_\-functions\-.sh} contain terminal-level bash functions to assist in finding problems with grid outputs and with merging them. To find small files (which are indicated by smaller file size than successful jobs), use \texttt{get\_bad\_output}. As an example,
 \begin{verbatim}
 get_bad_output 5000 beam/*.root
 \end{verbatim}
@@ -196,24 +203,322 @@ for subdir in `ls .`; do echo $subdir; find_missing_output $subdir/*.root; done
 \end{verbatim}
 This method will find failure modes both from interrupted ROOT output (crash causing \texttt{TFile} to be a zombie) and from ROOT output never started (crash before job finishes).
 
-Once you've gathered an acceptable number of output jobs, use \texttt{merge\_grid\_outputs} to merge individual job outputs for every systematic group:
+Once you've gathered an acceptable number of output jobs, use \texttt{merge\_\-grid\_\-outputs} to merge individual job outputs for every systematic group:
 \begin{verbatim}
-for subdir in `ls .`; do echo $subdir; merge_grid_outputs (YOUR DESTINATION DIRECTORY)/$subdir/ $subdir/*.root; done
+for subdir in `ls .`; do echo $subdir; \
+  merge_grid_outputs (YOUR DESTINATION DIRECTORY)/$subdir/ $subdir/*.root; \
+done
 \end{verbatim}
-If you are on a cluster supporting slurm and merging is taking forever, the CAFAna macro, \texttt{loading/MergeGridOutputsParallel.C} will instead accept a cookbook to inform what recipe names to look for and will output a command script that will submit batches of jobs to slurm that each parallelize some of the grid outputs.
+If you are on a cluster supporting slurm and merging is taking forever, the CAFAna macro, \texttt{loading/\-Merge\-Grid\-Outputs\-Parallel\-.C} will instead accept a cookbook to inform what recipe names to look for and will output a command script that will submit batches of jobs to slurm that each parallelize some of the grid outputs.
 
-Then, the outputs split by systematic group need to be merged into an \texttt{ana::PredictionInterp}. The CAFAna macro, \texttt{loading/MergeIntoPredictionInterp.C} will do this given a cookbook and your input directory (whatever you called "(YOUR DESTINATION DIRECTORY)" during the output merging step). The macro will automatically save the merged \texttt{ana::PredictionInterp} objects to whatever filepaths the recipe's disk readers will use for analysis. On a slurm cluster, you can use \texttt{loading/MergeIntoPredictionInterpParallel.C} to instead write slurm commands to execute this step in parallel.
+Then, the outputs split by systematic group need to be merged into an \texttt{ana::Prediction\-Interp}. The CAFAna macro, \texttt{loading/\-Merge\-Into\-Prediction\-Interp\-.C} will do this given a cookbook and your input directory (whatever you called "(YOUR DESTINATION DIRECTORY)" during the output merging step). The macro will automatically save the merged \texttt{ana::PredictionInterp} objects to whatever filepaths the recipe's disk readers will use for analysis. On a slurm cluster, you can use \texttt{loading/-Merge\-Into\-Prediction\-Interp\-Parallel\-.C} to instead write slurm commands to execute this step in parallel.
 
-To query what your new systematically-shifted samples look like, use \texttt{diagnositc/PlotSystPulls.C} to plot $+1\sigma$ and $-1\sigma$ variations for every systematic you loaded for every recipe.
+To query what your new systematically-shifted samples look like, use \texttt{diagnositc\-/Plot\-Syst\-Pulls\-.C} to plot $+1\sigma$ and $-1\sigma$ variations for every systematic you loaded for every recipe.
 
-\subsection{Nuances with loading extrapolated samples}
+\subsection{Nuances with loading extrapolated samples (TODO cite extrap technote) (TODO make cleaner method for detecting whether a prediction is extrapolated.}
 \label{sec:Nuances_with_loading_extrapolated_samples}
+An \textbf{extrapolated} prediction is a FD prediction that has corrections from ND MC-data differences applied. These corrections are computed under-the-hood using a specialized extrapolated prediction type.
+Extrapolated predictions must iterate over both FD and ND MC and data, and extrapolated FD recipes must be associated with ND recipes to compute the correct weights.
+The unified prediction factory, \texttt{Make\-Prediction} in \texttt{Spec/\-CAFLoading\-.h/cxx} will try to create an extrapolated prediction using \texttt{Try\-Make\-Extrapolated\-Prediction}.
+If the recipe's disk reader has "Extrap" in the name, it will treat the recipe as extrapolated. Extrapolated predictions are loaded from MC in transverse momentum (pT) quantiles which are merged in post-processing.
+
+The technique for mapping FD recipes to ND recipes for decomposition/extrapolation is as follows:
+\begin{enumerate}
+  \item If the FD recipe is numu, apply extrapolation weights to the numu survival channel only. Use the ND numu recipe of the same Ehad and pT quantile and horn current. No ND nue recipe is used for extrapolating FD numu samples.
+  \item If the FD recipe is nue:
+  \begin{enumerate}
+    \item If the FD recipe is high (low) PID, apply extrapolation weights to the nue appearance channel using the ND numu recipe of the same pT quantile and horn current. Apply extrapolation weights to the nue survival channel using the ND nue high (low) PID recipe of the same horn current.
+    \item If the FD recipe is peripheral, apply extrapolation weights to the nue appearance channel using the ND numu recipe of the same pT quantile and horn current. Apply extrapolation weights to the nue survival channel using the ND high PID recipe of the same horn current.
+    \item If the FD recipe is the FHC low energy nue sample, apply extrapolation weights to the nue appearance channel using the full ND FHC numu recipe. Apply extrapolation weights to the nue survival channel using the ND FHC low energy nue recipe.
+  \end{enumerate}
+\end{enumerate}
+The methods that implement this algorithm can be found in \texttt{Spec/\-CAFLoading.h/cxx} as \texttt{Get\-Mirror\-ND\-Numu\-Final\-State\-For\-Extrap} and \texttt{Get\-Mirror\-ND\-Nue\-Final\-State\-For\-Extrap}.
+
+Because preparing extrapolated predictions involves postprocessing (more steps than basic merging after iterating over MC), separate cookbooks are used for the loading and analysis steps. Loading systematic variations for extrapolated predictions is the same as with non-extrapolated predictions (use \texttt{LoadReweightablePredictions.C} and \texttt{LoadFileBasedPredictions.C}).
+
+An example cookbook that will load all \textbf{raw} (not yet postprocessed) spectra from the MC:
+\begin{verbatim}
+  prod51_fdExtrap_OfficialFD_nomExtrapRaw
+\end{verbatim}
+
+To explain the custom convention that's been chosen:
+\begin{itemize}
+  \item \textbf{prod51} indicates we are using production 5.1 for this example.
+  \item \textbf{fdExtrap} indicates that the final states chosen are being extrapolated (in pT quantiles). This set of final states (see \textbf{ENABLED\_FD\_FINAL\_STATES\_BY\_NAME} in \textbf{FinalStates.h/cxx}) has FD numu and nue samples separated by pT quantile. This is as opposed to \textbf{fdEhadQuants} which represents final states not split by pT quantiles.
+  \item \textbf{OfficialFD} indicates that we are using the official FD analysis binning for every sub-sample.
+  \item \textbf{nomExtrapRaw} indicates that we are loading nominal MC, that we intend for these predictions to live on disk in the extrapolated area (bookkeeping to disambiguate from non-extrap), and that these are \textbf{raw} predictions that have not yet been postprocessed.
+\end{itemize}
+
+As with predictions used for two-detector analyses, loading all predictions with the same cookbook can be computationally intractable, so loading jobs can be strategically partitioned with smaller cookbooks like so:
+\begin{verbatim}
+  prod51_fdFHCExtrap_OfficialFD_nomExtrapRaw
+  prod51_fdRHCExtrap_OfficialFD_nomExtrapRaw
+\end{verbatim}
+which will partition jobs by horn current such that the union of the two cookbooks is identical to the first one shown. If jobs need to be partitioned more, cookbooks can be written that split by neutrino type:
+\begin{verbatim}
+  prod51_fdNumuFHCExtrap_OfficialFD_nomExtrapRaw
+  prod51_fdNueFHCExtrap_OfficialFD_nomExtrapRaw
+  prod51_fdNumuRHCExtrap_OfficialFD_nomExtrapRaw
+  prod51_fdNueRHCExtrap_OfficialFD_nomExtrapRaw
+\end{verbatim}
+
+Extrapolated predictions will be loaded using real ND data. Fake data studies with fake (MC) ND data in extrapolated predictions are prepared using a custom implementation of the \textbf{Indiana Jones} technique (see Section \ref{sec:additional_post_processing_for_extrapolated_samples}).
 
 \subsection{Additional post-processing for extrapolated samples}
+\label{sec:additional_post_processing_for_extrapolated_samples}
+Extrapolated predictions can have their grid jobs merged in the same method as non-extrapolated predictions. All methods for merging the extrapolated predictions live in the \texttt{loading} area and have support for parallelization with slurm.
 
-\subsection{Loading NuMI data}
+First, extrapolated predictions can be merged into an \texttt{ana::PredictionInterp} with the same technique as non-extrapolated predictions.
 
-\subsection{Loading cosmic predictions}
+Next, you can diagnose whether your pT-quantile-partitioned recipes look ok by plotting all sub-samples' nominal predictions broken down by channel using \texttt{diagnostic/PlotPredictionComponents.C}. You can plot all systematic variations using \texttt{diagnostic/PlotSystPulls.C}.
+Since loading happens with a cookbook, we can pass the name of the cookbook to these macros verbatim as:
+\begin{verbatim}
+  cafe -bq PlotPredictionComponents.C prod51_fdExtrap_OfficialFD_nomExtrapRaw
+\end{verbatim}
+
+Next, recipes partitioned by pT quantile need to be summed up. \textbf{This is not the same operation as using \texttt{hadd\_cafana} on your sub-samples.} \texttt{hadd\_cafana} will average over the samples as if the same source of statistics, but we need to sum the samples as separate sources of statistics.
+\texttt{SumPtQuants.C} performs the summing. This macro expects:
+\begin{itemize}
+  \item An input cookbook which represents the configuration of input pT quantiles.
+  \item An output cookbook which denotes where the output recipes should live and how they should be configured. We expect the output cookbook to "look like" the input (same kinematic axes, same productions, but different sets of final states).
+\end{itemize}
+The macro can be used in our example as:
+\begin{verbatim}
+  cafe -bq SumPtQuants.C \
+    prod51_fdExtrap_OfficialFD_nomExtrapRaw \
+    prod51_fdEhadQuants_OfficialFD_nomExtrapRaw
+\end{verbatim}
+which symbolically says "take my recipes split by pT quants and transform them into being split by Ehad quants." The macro will, for every output recipe, try to find input recipes that are derived from the output except split by pT quant, then generate the ROOT file for the output recipe using the sum of the pT quants.
+
+You can diagnose whether this step succeeded using:
+\begin{verbatim}
+  cafe -bq PlotPredictionComponents.C prod51_fdEhadQuants_OfficialFD_nomExtrapRaw
+\end{verbatim}
+
+The final step of postprocessing merges the peripheral recipes into a single bin. This is done using \texttt{Extrapolate\-Predictions\-.C}:
+\begin{verbatim}
+  cafe -bq ExtrapolatePredictions.C \
+    prod51_fdEhadQuants_OfficialFD_nomExtrapRaw prod51_fdEhadQuants_OfficialFD_nomExtrap
+\end{verbatim}
+Non-peripheral recipes are effectively copied to the new locations dictated by the new disk reader.
+
+The output extrapolated cookbook is now ready to use for a Bayesian inference analysis using real ND data. For a modification to this procedure that uses fake ND data, see Section \ref{sec:preparing_extrapolated_predictions_using_fake_nd_data}.
+
+\subsection{Preparing extrapolated predictions using fake ND data}
+\label{sec:preparing_extrapolated_predictions_using_fake_nd_data}
+
+Using extrapolated predictions we just loaded in the example for a fake data study with fake ND data would be inappropriate because these predictions have extrapolation/decomposition weights using real ND data baked in. We instead need predictions using extrapolation/decomposition weights whose ND data spectrum uses the fake universe for the study.
+
+The straightforward method to use fake ND data spectra would be to re-perform the entire extrapolated prediction loading procedure, except instead of using the real NuMI data spectrum, we use whatever MC loader would be appropriate for our fake data study. For example, a fake data study with random systematic variations would replace the NuMI data loader with the MC loader and use systematic variations.
+However, this method is extremely cumbersome and inflexible. Suppose in a systematic variation fake data study, the one problematic systematic needs to be removed from the study. The entire suite of predictions would need to be re-loaded from scratch, including the FD MC even though the FD MC wouldn't change.
+
+One solution to this problem implemented in this technote is called the \textbf{Indiana Jones technique} (IJ) (imagine Indiana Jones swapping the golden head on the pedistal with a bag of sand, and we're going to pretend it isn't a disaster like in Raiders of the Lost Ark).
+The IJ technique trades simplicity for computational efficiency and flexibility. Rather than re-load FD extrapolated predictions with a new ND fake data universe from scratch, we instead load the ND fake data spectra standalone and use a custom macro to replace ND NuMI real data spectra with the fake data spectra inside our extrapolated prediction objects for every recipe. This is complicated for a few reasons:
+\begin{itemize}
+  \item In practice, this swapping needs to be done for every systematic variation. Thankfully, the same fake data spectrum is used for every systematic variation for a given recipe.
+  \item Numu survival, nue appearance, and nue survival appearance channels get handled differently by different decomposition objects. Making sure that the correct ND fake data spectrum gets inserted into the correct channel is nontrivial.
+  \item This step needs to be done before extrapolation/decomposition weights are computed and baked into prediction objects, so partway through the extrapolated prediction postprocessing procedure.
+\end{itemize}
+
+First, we must prepare all ND data spectra that we will use for a fake data study. As an example, we will prepare an in-model fake data study with random systematic variations. The following cookbook has been prepared for loading all of the ND spectra:
+\begin{verbatim}
+  prod51_ndForExtrap_NuEnergyND_nom
+\end{verbatim}
+The components of this cookbook are:
+\begin{itemize}
+  \item \textbf{prod51} denotes that we are using production 5.1.
+  \item \textbf{ndForExtrap} is a tag for a set of final states that is designed to contain all ND recipes we need for generating fake ND data.
+  \item \textbf{NuEnergyND} indicates we want to use reconstructed neutrino energy binning for ND recipes.
+  \item \textbf{nom} says that we want to load nominal MC. After loading, we will modify this disk reader to choose the fake data universe. Loading the nominal prediction means that these ND recipes can be used for \textit{any} fake data study that is derived from nominal MC. This example will only show how to do this explicitly for random systematic variations.
+\end{itemize}
+The recipes in this cookbook can be loaded and postprocessed from MC with the same procedure as in Section \ref{sec:loading_systematically_shifted_non_extrapolated_mc}.
+
+Next, it is suggested to use a diagnostic check to see that the new ND recipes look as you expect.
+
+We now insert the new ND fake data into the FD extrapolated predictions with a modified postprocessing procedure whose order is:
+\begin{enumerate}
+  \item Merge grid outputs for FD extrapolated predictions (can reuse from predictions with real ND data).
+  \item Merge into FD extrapolated predictions into \texttt{ana::Prediction\-Interp} (can reuse from predictions with real ND data).
+  \item \textbf{Insert new ND fake data into FD extrapolated predictions.}
+  \item Sum pT quantiles of FD extrapolated predictions (with new ND fake data).
+  \item Collapse peripheral samples into one bin apiece for FD extrapolated predictions (with new ND fake data).
+\end{enumerate}
+
+Starting at the new step, the ND fake data can be inserted into new FD extrapolated predictions using \texttt{Swap\-ND\-Data\-.C} as follows:
+\begin{verbatim}
+  cafe -bq SwapNDData.C \
+    prod51_fdExtrap_OfficialFD_nomExtrapRaw \
+    prod51_fdExtrap_OfficialFD_nomExtrapRawIJFakeRand0 \
+    prod51_ndForExtrap_NuEnergyND_nomFakeRand0 \
+    false extrap_2024
+\end{verbatim}
+where the arguments are:
+\begin{itemize}
+  \item \texttt{prod51\_fdExtrap\_OfficialFD\_nomExtrapRaw} is the input cookbook of FD extrapolated recipes containing the real ND data we will copy from.
+  \item \texttt{prod51\_fdExtrap\_OfficialFD\_nomExtrapRawIJFakeRand0} is the output cookbook of FD extrapolated recipes. This determines the output filepaths for recipes.
+  \item \texttt{prod51\_ndForExtrap\_NuEnergyND\_nomFakeRand0} is the input cookbook of ND recipies whose data spectra will be inserted into the new output recipes.
+  \item The boolean argument determines whether to overwrite existing outputs.
+  \item \texttt{extrap\_2024} is the name of a systematic policy that will be used for generating ND fake data spectra.
+\end{itemize}
+The macro will, for every input extrapolated FD recipe, find the matching final state in the output cookbook and use its recipe as the output. The macro will try, for every output FD recipe, to find real ND numu and nue data to swap out. For every ND data spectrum it finds that needs swapping, it will try to find the associated recipe in the ND input cookbook according to the FD-ND matching rules defined by \texttt{Get\-Mirror\-ND\-Numu\-Final\-State\-For\-Extrap} and \texttt{Get\-Mirror\-ND\-Nue\-Final\-State\-For\-Extrap}. The ND spectrum used for every recipe is the result of \texttt{Recipe::\-Get\-NuMI\-Data} (in this case, a fake data spectrum generated on the fly from the MC).
+
+The new IJ disk reader, \texttt{nom\-Extrap\-Raw\-IJ}, is a light extension of a basic disk reader that enforces patterns about where recipes live to help with organizing prediction objects for many fake data studies.
+The behavior of the disk reader, \texttt{nom\-Extrap\-Raw\-IJ\-Fake\-Rand0}, is to use the new IJ-swapped predictions corresponding to the fake universe with random systematic variations with seed zero, and before returning data spectra, to vary the (FD) MC with the same fake universe.
+
+To diagnose whether the new ND data spectra were inserted correctly, use the macro, \texttt{diagnostic/Plot\-Extrapolated\-Prediction\-ND\-.C}. This macro can be used before using the IJ technique to investigate the real ND NuMI data that the predictions were loaded with and after to demonstrate data spectra were inserted as expected. Now is also a good time to use \texttt{diagnostic/\-Plot\-Prediction\-Components\-.C} on the output prediction to check that the predictions look sane.
+
+TODO include plots showing good and bad diagnostic output.
+
+Next, pT quants can be summed using
+\begin{verbatim}
+  cafe -bq SumPtQuants.C \
+    prod51_fdExtrap_OfficialFD_nomExtrapRawIJFakeRand0 \
+    prod51_fdEhadQuants_OfficialFD_nomExtrapRawIJFakeRand0
+\end{verbatim}
+and the peripheral bin can be merged using
+\begin{verbatim}
+cafe -bq ExtrapolatePredictions.C \
+    prod51_fdEhadQuants_OfficialFD_nomExtrapRawIJFakeRand0 \
+    prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0
+\end{verbatim}
+Now, the cookbook, \texttt{prod51\_\-fdEhad\-Quants\_\-Official\-FD\_\-nom\-Extrap\-IJ\-Fake\-Rand0}, is ready for use in analysis.
+
+\subsection{Loading NuMI data (TODO)}
+
+\subsection{Loading cosmic predictions (TODO need to copy over the cosmic loader macro)}
+
+\subsection{Estimating the covariance matrix for two-detector configurations}
+To expidite MCMC warmup for the two-detector case, we supply an initial guess of the inverse metric. We do this in two steps: one step for systematics and one step for oscillation parameters.
+
+For systematics, we take covariance matrix for a good minimum in $\chi^2$ space over ND recipes. We use Minuit to perform a gradient descent and extract a covariance:
+\begin{verbatim}
+  sbatch cluster_estimate_covariance \
+    prod51_ndTopological_NumuQ3Q0NueThetaLepE_nomFakeRand0 \
+    two_det_2024 \
+    0 \
+    two_det_2024 \ # Optional - only necessary for systematically-shifted fake data.
+    my_analysis_tag # Optional - autogenerated if not specified.
+\end{verbatim}
+Like for other analysis/sampling macros, we will pass a cookbook to specify the configuration of sub-samples. Notice that we have used the cookbook to remove FD recipes for this step. \texttt{two\_\-det\_\-2024} is the name of a systematic policy. The first instance indicates what systematics are free in the minimization. The second instance indicates the systematic policy we use to generate fake data with systematic variations. In general, the second instance is optional, but we need it for our study because we are applying random systematic variations. As this is an in-model study, the systematic policies for minimization and for making fake data are the same. 0 is the offset we use for the random seeding of the minimization which can be changed to run more batches of minimizations. \texttt{my\_\-analysis\_\-tag} indicates a unique tag you can specify to name your analysis. Plotting macros expect tags to find input and generate outputs. If the tag is unspecified, it will be autogenerated from the other arguments.
+
+After performing many minimizations, we will choose a well-behaved-looking metric with the minimum $\chi^2$ among minimizations. Many are expected to fail, but we only need one to succeed! Use \texttt{Plot\-Covariance\-.C} to plot all covariance matrices and minimization results simultaneously.
+
+For oscillation parameters, we perform a single dedicated small Stan warmup job on FD samples without systematic freedom:
+\begin{verbatim}
+  sbatch cluster_make_fd_sub_warmup \
+    prod51_fdEhadQuants_OfficialFD_nomFakeRand0 \
+    true \
+    two_det_2024 \ # Optional - only necessary for systematically-shifted fake data.
+    asimovA \ # Optional - only necessary for asimov fake data.
+    my_analysis_tag # Optional.
+\end{verbatim}
+The cookook indicates the configuration of FD sub-samples. The boolean flag configures whether we warm up in normal (or inverted) ordering. The systematic policy and asimov point are used for making fake data. We expect the asimov point to be an acceptable input to \texttt{ana::\-Reset\-Osc\-Calc\-To\-Asimov\-Point}. The tag is again optional and autogenerated if not specified.
+
+We expect this FD sub-warmup job to succeed and run quickly, particularly after the first Stan warmup "window" has completed. To plot the resulting traces and the metric, use \texttt{Plot\-FD\-Sub\-Warmup\-.C}.
+
+\subsection{Performing warmup for two-detector configurations}
+Two-detector warmup is informed by both the systematic covariance estimate and the FD sub-warmup. The seed points for systematic parameters are taken from the best minimization. The seed points for oscillation parameters are taken from the last sample of the FD sub-warmup. The inverse metric is passed as the concatenation of the FD sub-warmup inverse metric and the best covariance matrix. The purpose of the full warmup is to better converge to the typical set, to tune the step size, and to tune the inverse metric of the full typical set of the full parameter set. Rather than perform warmup before main MCMC sampling, we instead prepare a single warmup chain and use it for all MCMC jobs. Use:
+\begin{verbatim}
+  cluster_estimate_covariance \
+    prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0 \
+    two_det_2024 \
+    covariance_matrices/\
+prod51_ndTopological_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024 \
+    covariance_matrices/\
+fd_sub_warmup_prod51_fdEhadQuants_OfficialFD_nomFakeRand0_NO_two_det_2024_asimovA.root \
+    two_det_2024 \ # Optional - only necessary for systematically-shifted fake data.
+    asimovA \ # Optional - only necessary for asimov fake data.
+    my_analysis_tag # Optional.
+\end{verbatim}
+The parameters are the cookbook, then the systematic policy for sampling, then a filepath to covariance matrix outputs, a filepath to a ROOT file containing FD sub-warmup output, then the systematic policy and asimov point for generating fake data, then the analysis tag override. Use \texttt{Plot\-Warmup\-.C} to plot the diagnostic and parameter traces and the inverse metric for the warmup job once complete.
+
+The full warmup of a two-detector job is expected to take a long time (about a day on a CPU) and will fail for a poor estimate of the systematic covariance. Unfortunately, it is not parallelizable. See Section \ref{sec:diagnosing_poorly_performing_mcmc_warmup} for discussion of Stan warmup failure modes and how to address them.
+
+Warmup-making macros will output using \texttt{Stan\-Fitter::\-Verbosity::\-kVery\-Verbose} mode which will output to \texttt{std::\-cout} the diagnostic and parameter state of every MCMC sample as they are created. This is highly useful to predict whether the sampler will succeed or fail at warmup early in the job or after the first window passes in phase II of warmup.
+
+As an alternative to generating warmup from scratch, if you have a successful warmup job already finished that is similar enough to your target warmup, use \texttt{Make\-Warmup\-From\-Seed\-.C} to accept that similar warmup as an input to update the typical set estimate and the metric and step size.
+
+\subsection{Performing warmup for extrapolated configurations}
+Preparing warmup for extrapolated cookbooks is simpler than for two-detector because the systematic subspace has a simpler likelihood surface with extrapolated systematics (most systematics become more Gaussian-like after extrapolation) and because the likelihood query is much faster (no need to query tens of thousands of ND bins for every leapfrog step). To prepare warmup for extrapolated cookbooks,
+\begin{verbatim}
+  cluster_make_warmup_raw \
+    prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0 \
+    extrap_2024 \
+    extrap_2024 \ # Optional - only necessary for systematically-shifted fake data.
+    asimovA \ # Optional - only necessary for asimov fake data.
+    my_analysis_tag # Optional.
+\end{verbatim}
+
+As all of the warmup macros output in the same fashion, use \texttt{Plot\-Warmup\-.C} in the same fashion as with two-detector warmup.
+
+\subsection{Parallelized MCMC sampling}
+This step is the computationally heavyweight step of the analysis past prediction loading. There are two schemes of parallelization that are available for main MCMC sampling:
+\begin{itemize}
+  \item \textbf{Many job submissions:} (On Fermigrid or on a slurm cluster) submit many unique jobs with their own CPU core and memory allocations.
+  \item \textbf{Multithreading:} Submit jobs with multiple CPU cores per job and launch one thread per hardware core. Jobs are configured such that each thread computes a chain in parallel. Memory that's specific to each chain (a fitter, the MCMC configuration, the MCMC state, and the autodiff stack) is thread local. All other memory (including CAFAna overhead and the prediction objects) is shared among threads.
+\end{itemize}
+Increasing the number of jobs submitted and increasing the number of chains per job increase how many chains can be computed simultaneously. However, they serve different functions. As making new job submissions allocates more memory, these new jobs are entirely independent from existing jobs but can cause bottlenecks if the computing cluster is in a memory-bottlenecked state.
+Multithreading allows for making more chains at once without increasing memory requirements, but because chains can compete for accessing memory simultaneously, two chains computed with multithreading that share memory will always take longer than two chains from separate jobs.
+In the two-detector case, having main sampling be memory efficient is important because the ND predictions with all systematic variations consume lots of memory (8 to 16 GB). Multithreading allows chains to share predictions, reducing the overhead.
+In practice, more job submissions will always allow for making more chains at once. The level of multithreading used is a dial that can be tuned. More threading reduces CPU efficiency but increases memory efficiency compared to as if you'd computed the chains on separate jobs. Fewer threads are more CPU efficient but less memory efficient.
+
+To make use of multithreading, the likelihood query \textbf{must be thread safe} meaning that unintended behavior must not occur for any two threads being at any two intermediate states of performing their likelihood queries.
+For example, non-atomic caches are typically not thread-safe because one thread can invalidate a cache while another thread assumes that it is still valid.
+As of the writing of this technote likelihood queries in CAFAna involving typical \texttt{ana::\-Syst\-Shifts}, \texttt{ana::\-IExperiment}, \texttt{ana::\-Prediction\-Interp}, etc objects are thread safe.
+If your likelihood query, for any reason, is not thread safe, your program will do something unexpected eventually with more than one thread. You can safely disable the multithreading by setting the number of threads to 1.
+
+As an example case of how to configure threading, on the Tufts cluster, nodes typically have 64 hardware cores and 512 GB. This means if we launch MCMC sampling jobs, we can use all cores with 8 GB of memory per core. However, two-detector sampling jobs often require more than 8 GB of memory, so we can use all memory and cores by requesting 16 GB per job and using two threads per job.
+If the cluster is an a state of being memory-bottlenecked because of other users' activities, you can also increase the number of threads per job and reduce the number of jobs requested to help your jobs get slotted.
+
+You can perform high-statistics MCMC sampling with:
+\begin{verbatim}
+  cluster_make_samples \
+    prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0 \
+    two_det_2024 \
+    two_det_2024 \ # Optional - only necessary for systematically-shifted fake data.
+    asimovA \ # Optional - only necessary for asimov fake data.
+    my_analysis_tag # Optional.
+\end{verbatim}
+where the parameters follow the same patterns as for making MCMC warmup.
+
+TODO it would be convenient to pass the number of samples as a parameter to \texttt{Make\-Samples\-.C}.
+
+Each chain will have a \texttt{Sampling\-Ctx\-.C} structure attached inside its ROOT file indicating how the chain was prepared with whatever information is available. This includes any fake data unvierse used to prepare the chain which is useful for plotting.
+
+Each job and thread will output a chain to a different file location. It's advised to keep these chains separated for future MCMC convergence checks. However, for iterating over the chain to analyze the posterior, it's most convenient to concatenate the small MCMC chains into one large one (\texttt{ana::\-Bayesian\-Marginal\-Deck} only accepts one chain at a time). A custom macro concatenates chains, discards warmup, applies burnin, and preserves metadata stored in ROOT files:
+\begin{verbatim}
+  cafe -bq MergeMCMC.C \
+    500 \
+    mcmc_samples/\
+mcmc_samples_prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0\
+_two_det_2024_two_det_2024_asimovA.root
+    mcmc_samples/\
+prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0\
+_two_det_2024_two_det_2024_asimovA/*.root
+\end{verbatim}
+where the first argument is the \textbf{burnin} (number of samples thrown away from the start of each chain). Because we use the same warmup for every MCMC chain, it is an error to use 0 burnin because the posterior would be biased because every chain is seeded from the same initial point.
+The burnin should be longer than the autocorrelations for any parameter. The burnin should also be chosen after the sample after which trace heatmap plots appear stochastic (see Section \ref{sec:mcmc_convergence_checks}). To account for 2D correlations between parameters, it is advised to err towards throwing away more samples - it's an iterative process until you are comfortable with your chains and your statistics. Too \textit{much} burnin can make your MCMC chains shorter than necessary, potentially biasing your posterior because of intra-chain autocorrelations being truncated by the end of the chain.
+
+The second parameter is the output filepath for the concatenated chain. This output path has been chosen because posterior analysis macros will look for a chain in this location. The remaining parameters (variadic, arbitrarily long) are input chains. In this incantation, the UNIX glob silently expands to a whitespace-delimited list of input files because analysis tags are separated by output directory.
+
+This macro will try to preserve other metadata in the ROOT files other than the main MCMC chain itself.
+
+\subsection{MCMC convergence checks (TODO and include posterior predictive)}
+\label{sec:mcmc_convergence_checks}
+
+\subsection{Posterior analysis}
+The posterior is a high-dimensional object, making it difficult to visualize. The most straightforward tactic for visualizing the posterior is to marginalize it, meaning to represent distributions of the posterior in one or two dimensions while integrating over all other parameters. For MCMC, this is performed by binning samples into a histogram as you would any MC dataset.
+
+The Bayesian two-detector analysis uses the \texttt{Bayesian\-Marginal} suite of tools to efficiently marginalize over high statistics MCMC chains. Axes used for marginalization of oscillation parameters are fixed (a function of an asimov point for a fake data study). Axes for marginalization of systematic parameters are computed on-the-fly because the shape of the non-extrapolated systematic subspace is not intricately known before marginalization.
+
+For large concatenated chains (more than about 3 GB), it is advised to keep chains on disk rather than reading them into memory all at once (the \texttt{ana::\-MCMC\-Samples} default). Macros will keep MCMC samples on disk to cover the case of large chains. This is done because ROOT will silently drop \texttt{TTree} baskets from large chains, making posteriors look ridiculous. Keeping trees on disk is, in theory, slower for iteration but gurantees the correct answer from the ROOT side.
+
+\texttt{ana::\-Plot\-Samples\-.C} is the primary macro used for visualizing marginal distributions of the posterior for a single analysis tag. The macro will output all 1D marginals of oscillation and systematic parameters, canonical 2D marginals of oscillation parameters, 2D marginals of $\Delta m^2_{32}$ with all systematics, and the big systematic pulls plot.
+The macro implements \texttt{ana::\-Sample\-Transform}s to compute marginals in $\delta_{\mathrm{CP}}$, $\sin^2(2\theta_{13})$, and $\sin^2\theta_{23}$. Marginal plotting macros will try to draw lines on top of marginals to indicate true pulls in a fake data study. These are automatically specified in the \texttt{Sampling\-Ctx\-.C} metadata structure that gets attached to sampling jobs.
+
+To superimpose marginals in a comparison-plot style, use \texttt{ana::\-Plot\-Samples\-Superimposed\-.C} which accepts an arbitrarily large number of analysis tags to superimpose.
+
+\section{Diagnosing poorly-performing HMC (warmup) - A Stan survival guide (TODO)}
+\label{sec:diagnosing_poorly_performing_mcmc_warmup}
 
 \end{document}
-
