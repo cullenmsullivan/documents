@@ -164,15 +164,29 @@ const Cookbook("your_cookbook_internal_name","latex-formatted name",
 \end{verbatim}
 or if you intend to compare many configurations of cookbooks, consider instead using the cookbook-parsable-name-format (Section \ref{sec:bayesian-specification-library-structures}). Rather than define the cookbook itself in static memory, you can define each of the ingredients for runtime-lookup.
 
-To diagnose the basic characteristics of your cookbook in a cheap manner, see \texttt{diagnostic/\-{Load}{Plot}\-Nominal\-Predictions\-.C}. Loading systematic variations from CAFs is a computationally expensive procedure, so ensure that all of the sub-samples look sensible before trying to load systematic variations.
+To diagnose the basic characteristics of your cookbook in a cheap manner, see \texttt{diagnostic/\-{Load}{Plot}\-Nominal\-Predictions\-.C}. Loading systematic variations from CAFs is a computationally expensive procedure, so ensure that all of the sub-samples look sensible before trying to load systematic variations (see Figure \ref{fig:nominal_predictions_example}).
 
 For non-extrapolated predictions, there is no purpose in loading separate pT quantiles and merging them later (the standard 3F extrapolation approach). Two-detector non-extrapolated predictions are loaded directly, and the FD nue peripheral sample is loaded as a single bin.
 
 Like many macros in the two-detector framework, the only (or most important) argument is a cookbook. These macros are configured to accept a cookbook name (failure to parse will cause an abort sequence). As with other macros whose style is "do something for every recipe/final state" the macros will create outputs whose names are informed by the cookbook short name and final state or recipe short names.
 
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/nominal_predictions/prod51_ndTopological_Q3Q0_nom/prod51_ND_MuPiEtc_fhc_Q3Q0_prongCVN_nom.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/nominal_predictions/prod51_fdEhadQuants_OfficialFD_nom/prod51_FD_Numu_fhc_EhadQuant_1_OfficialFD_fdSelection_nom.png}
+\end{minipage}
+\caption{Example nominal predictions whose recipes are used as inputs to a two-detector analysis. \textbf{Left:} ND MuPiEtc FHC topology in Q3Q0 space. \textbf{Right:} FD numu FHC Ehad quant 1 sample.}
+\label{fig:nominal_predictions_example}
+\end{figure}
+
 \subsection{Loading systematically shifted non-extrapolated MC}
 \label{sec:loading_systematically_shifted_non_extrapolated_mc}
-This step is expensive, so be mindful that your samples will behave as you expect before trying to load all systematic variations.
+This step is expensive, so ensure that your samples will behave as you expect before trying to load all systematic variations.
 
 Systematics that can be computed through reweights are loaded using \texttt{loading/\-Load\-Reweightable\-Predictions\-.C} which is capable of loading both non-extrapolated and extrapolated FD predictions and ND predictions. Loading a \texttt{ana::Prediction\-Interp} directly is computationally intractable, so instead, this macro loads individual systematic variation predictions by groups. Definitions and names of systematic groups are defined in \texttt{Spec/\-Systs202X\-.h}. The idea is that for every final state, separately load batches of systematically shifted predictions such that the union of systematic variation predictions can be postprocessed into an \texttt{ana::Prediction\-Interp}.
 
@@ -184,12 +198,17 @@ Systematics that can be computed through reweights are loaded using \texttt{load
     \item \texttt{prod51\_fdFHCEhadQuants\_OfficialFD\_nom} (All FD FHC in reco nue space)
     \item \texttt{prod51\_fdRHCEhadQuants\_OfficialFD\_nom} (All FD RHC in reco nue space)
 \end{itemize}
-These cookbooks are chosen such that the union of samples compose the analysis cookbook. Splitting up the cookbooks also has the added advantage that a localized problem only requires a small respin, not a total respin over all recipes. Notice that the disk reader is \texttt{nom} and not \texttt{nomFake} because we do not need any mechanism to generate fake data on-the-fly during the prediction-loading step. \texttt{LoadReweightablePredictions.C} delegates most of the work to the unified prediction factory, \texttt{MakePrediction}, which is a switcher for making non-extrapolated and extrapolated FD predictions.
+These cookbooks are chosen such that the union of recipes compose the analysis cookbook. Splitting up the cookbooks also has the added advantage that a localized problem only requires a small respin, not a total respin over all recipes. Notice that the disk reader is \texttt{nom} and not \texttt{nomFake} because we do not need any mechanism to generate fake data on-the-fly during the prediction-loading step. \texttt{LoadReweightablePredictions.C} delegates most of the work to the unified prediction factory, \texttt{MakePrediction}, which is a switcher for making non-extrapolated and extrapolated FD predictions.
+
+Reweightable systematics are split into loading groups which are implemented as systematic policies in \texttt{Spec/\-Systs2024.h/cxx}. Convenience shell functions live in \texttt{shell\_\-functions\-.sh} including a function called \texttt{get\_\-reweightable\_\-syst\_\-groups} which can be used to perform submissions for all systematic groups like:
+\begin{verbatim}
+  for group in `get_reweightable_syst_groups`; do echo $group; (YOUR JOB SUBMISSION); done
+\end{verbatim}
 
 File-based systematic variations are loaded using \texttt{Load\-File\-Based\-Predictions\-.C} on Fermigrid. It encodes the mapping of systematic name and sigma to a file-based loader. Predictions for detector calibration are loaded uncorrelated, then after spectra are loaded, the correlated and anticorrelated predictions are saved to file too.
 
 \subsection{Post-processing systematically shifted non-extrapolated MC (TODO document squashing)}
-Minimal post-processing first involves merging the outputs using something like \texttt{hadd\_cafana}. However, managing the sheer number of sub-predictions alone is challenging. \texttt{TwoDet/\-shell\_\-functions\-.sh} contain terminal-level bash functions to assist in finding problems with grid outputs and with merging them. To find small files (which are indicated by smaller file size than successful jobs), use \texttt{get\_bad\_output}. As an example,
+Minimal post-processing first involves merging the outputs using something like \texttt{hadd\_cafana}. However, managing the sheer number of sub-predictions alone is challenging. \texttt{shell\_\-functions\-.sh} contains functions to assist in finding problems with grid outputs and with merging them. To find small files (which are indicated by smaller file size than successful jobs), use \texttt{get\_bad\_output}. As an example,
 \begin{verbatim}
 get_bad_output 5000 beam/*.root
 \end{verbatim}
@@ -213,7 +232,57 @@ If you are on a cluster supporting slurm and merging is taking forever, the CAFA
 
 Then, the outputs split by systematic group need to be merged into an \texttt{ana::Prediction\-Interp}. The CAFAna macro, \texttt{loading/\-Merge\-Into\-Prediction\-Interp\-.C} will do this given a cookbook and your input directory (whatever you called "(YOUR DESTINATION DIRECTORY)" during the output merging step). The macro will automatically save the merged \texttt{ana::PredictionInterp} objects to whatever filepaths the recipe's disk readers will use for analysis. On a slurm cluster, you can use \texttt{loading/-Merge\-Into\-Prediction\-Interp\-Parallel\-.C} to instead write slurm commands to execute this step in parallel.
 
-To query what your new systematically-shifted samples look like, use \texttt{diagnositc\-/Plot\-Syst\-Pulls\-.C} to plot $+1\sigma$ and $-1\sigma$ variations for every systematic you loaded for every recipe.
+To query what your new systematically-shifted samples look like, use \texttt{diagnositc\-/Plot\-Syst\-Pulls\-.C} to plot $+1\sigma$ and $-1\sigma$ variations for every systematic you loaded for every recipe (see Figure \ref{fig:systematically_shifted_spectra_example}). This output is not only useful as a diangostic to sanity check your outputs but also to get a feel for how much constraining power your ND samples will have on each systematic. In the case of \texttt{MaCCRES}, this output indicates a strong constraint because of its strong shape-dependent effect on multiple topologies.
+
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/syst_pulls_plots/prod51_ndTopological_Q3Q0_nom/ND_MuPiEtc_fhc/MaCCRES.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/syst_pulls_plots/prod51_fdEhadQuants_OfficialFD_nom/FD_Numu_fhc_EhadQuant_1/MaCCRES.png}
+\end{minipage}
+\caption{Example systematically shifted predictions generated by turning the \texttt{MaCCRES} GENIE knob. \textbf{Left:} ND MuPiEtc FHC topology in Q3Q0 space with the top two plots as the systematically shifted prediction and the bottom two plots as the ratio shifted over nominal. \textbf{Right:} FD numu FHC Ehad quant 1 sample showing the systematic shifts on the top and the ratio shifted over nominal on the bottom.}
+\label{fig:systematically_shifted_spectra_example}
+\end{figure}
+
+\subsection{Squashing two-detector ND predictions}
+Performing inference on 2D ND topological samples will achieve the correct answer, but many bins in these samples are empty (in Q3Q0 space, the upper left corner, $Q^2 < 0$, is kinematically forbidden, and the bottom right corner is typically underpopulated.). In practice, this means the sampler will spend time computing zero counts against zero predicted counts over many bins over many samples. As a sampling optimization, we perform a technique we have called "squashing" where we explicitly remove empty bins for predictions and data used as fit inputs. This method will not change any likelihood queries on ND predictions because the sampler only cares about bin \textit{counts}, not bin \textit{locations}. As all of the kinematic physics are already baked into the cross section, systematic, and other models, transforming the logical bin indices will do nothing to the likelihood query itself.
+
+The macro, \texttt{Squash\-Spectra.C}, performs the following algorithm for every ND member recipe of the cookbook passed as an argument:
+\begin{enumerate}
+  \item Using the NuMI prediction for the recipe, accumulate a set of bin indices to keep:
+  \begin{itemize}
+    \item The set of bins to keep is the union of bins to keep over all systematic variations in the prediction.
+    \item For any variation spectrum, any bin whose content is greater than the minimum (default = 0.1) is a member of the set of bins to keep. 
+  \end{itemize}
+  \item For every systematic variation, a new squashed prediction is created that only keeps bins marked as kept.
+  \item A new NuMI \texttt{ana::\-Prediction\-Interp} is created using all of the new systematic variation predictions.
+  \item The new NuMI prediction is saved to \texttt{recipe.\-Get\-NuMI\-Prediction\-Path\-(true)} This is the directory containing squashed NuMI predictions for this recipe.
+\end{enumerate}
+The core methods that execute this algorithm live in \texttt{Spec/\-Squash.\-h/cxx}.
+
+Any predictions not squashed (i.e. FD predictions) can be soft symlinked or copied to the squashed directory for use in sampling.
+
+The minimum bin content to keep can changed to tune how aggressively to squash predictions. Use \texttt{diagnostic/\-Plot\-Squashed\-Spectra.C} to visualize predictions before and after squashing (see Figure \ref{fig:squashed_spectra_example}).
+
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/squashed_spectra/prod51_ndTopological_Q3Q0_nom/ND_MuPiEtc_fhc_not_squashed.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/squashed_spectra/prod51_ndTopological_Q3Q0_nom/ND_MuPiEtc_fhc_squashed.png}
+\end{minipage}
+\caption{Logical binning of the ND MuPiEtc FHC topology loaded in Q3Q0 space. \textbf{Left:} before squashing. \textbf{Right:} after squashing. Note the reduction in the total number of bins.}
+\label{fig:squashed_spectra_example}
+\end{figure}
+
+TODO this macro needs to be extended to also operate on ND NuMI data spectra. We need to extend the bins-to-keep decision algorithm to also look at NuMI data spectra, and the bins-to-keep needs to be identical between the prediction and the NuMI data.
 
 \subsection{Nuances with loading extrapolated samples (TODO cite extrap technote) (TODO make cleaner method for detecting whether a prediction is extrapolated.}
 \label{sec:Nuances_with_loading_extrapolated_samples}
