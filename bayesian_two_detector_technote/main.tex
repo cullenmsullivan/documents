@@ -379,6 +379,44 @@ For two-detector ND sub-samples, fake data spectra are generated on-the-fly insi
 
 Extrapolated samples have fake data generated on-the-fly identically to non-extrapolated samples except with an extra step. By default, extrapolated samples are loaded with real NuMI data used for computing decomposition/extrapolation weights. For an apples-to-apples fake data study comparing with two-detector, we must replace the real ND data with fake data generated using the same fake data universe used elsewhere in the study. We execute this replacement using the Indiana Jones technique (see Section \ref{sec:preparing_extrapolated_predictions_using_fake_nd_data}).
 
+\subsection{Priors}
+In this technote, priors are both used in the Bayesian sense (to indicate a flat expectation for oscillation parameters and to encourage systematic parameters to remain near nominal) and to restrict the sampler to the domain of the systematic subspace. Priors are the same between two-detector inference and extrapolation.
+\begin{itemize}
+  \item \textbf{Oscillation parameters:} Uniform priors in \th{13}, \th{23}, \dmsq{32}, \dcp are used. For this analysis, no reactor constraint is used, but it could be. For \dcp, the "bounded effective step prior" is used, which extends its domain from $-\pi$ to $3\pi$ with a Gaussian-shaped prior chosen such that taking the modulus with $2\pi$ (restricting the domain from $0$ to $2\pi$) results in a posterior generated identically to if sampling was performed with a uniform prior in \dcp. This is done because cyclic parameters break the NUTS algorithm.
+  \item \textbf{Systematic parameters:} The "exponential log" prior is used as a baseline prior for all systematics: $\mathcal{LL} = -\mathrm{exp}(0.3025\sigma^2)$. Centered at 0, the prior encourages sampling near nominal but readily allows $\sigma \in [-1,+1]$. Pulls beyond $-2$ and $+2$ become strongly discouraged. The exponential log prior is modified to respect the domains of some systematics. The sampler is effectively restricted from exploring any space where the prior is nearly zero, so we implement domain barriers by transforming the exponential log prior to a piecewise function such that the allowed region of the prior follows the exponential log prior and the disallowed region follows some functional form that sends the prior to nearly zero. However, Stan HMC requires continuous differentiability of the prior, restricting the classes of functions that can be used for the disallowed region. Considerations for systematic domain barriers fall into one of three cases:
+  \begin{enumerate}
+    \item The systematic has no special domain restriction for $\sigma \in [-3,+3]$. \texttt{ana::\-Prediction\-Interp} is allowed to extrapolate past $-3$ and $+3$, but the prior makes pulls this large unlikely. The exponential log prior is used without modification over the entire space of $\sigma$.
+    \item The systematic has a one-sided restriction such that either all negative or positive $\sigma$ are disallowed. Conveniently, the slope of the exponential log function at $\sigma = 0$ is 0 for any coefficient in the exponent, so we implement a domain barrier with the same functional form but a much larger coefficient in the exponent for the disallowed side.
+    \item The systematic requires a domain barrier for some $\sigma \ne 0$. For the disallowed region, we use an exponential: $\mathcal{LL} = -e^{\omega(\sigma-m)} - C$ where the coefficients, $\omega$, $m$, and $C$ are fixed by the continuous differentiability condition, from the knot position, and from a chosen large coefficient.
+  \end{enumerate}
+\end{itemize}
+See Figure \ref{fig:syst_prior_cases} for examples of each case of systematic prior.
+
+\begin{figure}[hbt]
+  \begin{minipage}{0.32\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{two_det_diagnostic_plots/priors/prod51_ndTopological_NumuQ3Q0NueThetaLepE_nom_two_det_2024/MaCCRES_priorLL.png}
+    \centering
+    \includegraphics[width=\linewidth]{two_det_diagnostic_plots/priors/prod51_ndTopological_NumuQ3Q0NueThetaLepE_nom_two_det_2024/MaCCRES_prior.png}
+  \end{minipage}
+  \hfill
+  \begin{minipage}{0.32\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{two_det_diagnostic_plots/priors/prod51_ndTopological_NumuQ3Q0NueThetaLepE_nom_two_det_2024/LowQ2RESSupp2020_priorLL.png}
+    \centering
+    \includegraphics[width=\linewidth]{two_det_diagnostic_plots/priors/prod51_ndTopological_NumuQ3Q0NueThetaLepE_nom_two_det_2024/LowQ2RESSupp2020_prior.png}
+  \end{minipage}
+  \hfill
+  \begin{minipage}{0.32\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{two_det_diagnostic_plots/priors/prod51_ndTopological_NumuQ3Q0NueThetaLepE_nom_two_det_2024/DISNuHadronQ1Syst_priorLL.png}
+    \centering
+    \includegraphics[width=\linewidth]{two_det_diagnostic_plots/priors/prod51_ndTopological_NumuQ3Q0NueThetaLepE_nom_two_det_2024/DISNuHadronQ1Syst_prior.png}
+  \end{minipage}
+  \caption{Priors for some systematic parameters. \textbf{Top:} Priors in negative log likelihood space (proportional to a $\chi^2$ penalty in frequentist terms, so larger values are discouraged). \textbf{Bottom:} Priors in likelihood space (distribution of expectations, so lower regions are discouraged). \textbf{Left:} Case 1 (\texttt{Ma\-CC\-RES}) where no domain barriers are added. \textbf{Middle:} Case 2 (\texttt{Low\-Q2\-RES\-Supp\-2020}) where a one-sided domain barrier is added. \textbf{Right:} Case 3 (\texttt{DIS\-Nu\-Hadron\-Q1\-Syst}) where domain barriers are added for $\sigma \ne 0$. Notice all piecewise functions are continuously differentiable.}
+  \label{fig:syst_prior_cases}
+\end{figure}
+
 \subsection{HMC warmup}
 Now that loading the predictions and (fake) data is complete, we've finished preparing the model. We're now ready to perform inference with Stan HMC. Before taking MCMC samples that we'll use for inference, we must first warm up the sampler. In warmup, the sampler adapts itself to the geometry of the parameter space by tuning a step size (used for numerical integration of simulated trajectories), a metric (like a topological metric that warps space for exploring a simpler geometry), and the position state of the sampler to the typical set. Stan HMC chooses a unit diagonal metric as an initial ansatz and iteratively tune it through warmup. Stan HMC warmup has three phases:
 \begin{enumerate}
@@ -396,13 +434,36 @@ Note that this issue is completely orthogonal to the slow likelihood query probl
 To compute the metric for two-detector inference, we use a multi-stage warmup technique that leverages the fact that the inverse metric is identical to the covariance matrix drawn from the typical set:
 \begin{enumerate}
   \item \textbf{Covariance estimation:} Perform frequentist gradient descent of systematic parameters only using ND sub-samples using MINUIT over many pseudoexperiments to find a good minimum of the parameter space. We extract the covariance matrix around the minimum.
-  \item \textbf{FD sub-warmup:} Perfom typical Stan HMC over the oscillation parameters only using FD sub-samples.
-  \item \textbf{Main warmup:} (TODO)
+  \item \textbf{FD sub-warmup:} Perfom typical Stan HMC over the oscillation parameters only using FD sub-samples. Warmup is performed in normal ordering only without a mass ordering switch.
+  \item \textbf{Main warmup:} Use the pseudoexperiment with a valid minimum, valid covariance matrix, and the minimum $\chi^2$, to seed the systematic subspace of the metric. Use the metric from FD sub-warmup to seed the oscillation subspace of the metric. Seed main warmup with an inverse metric as the concatenation of the systematic covariance matrix and the oscillation inverse metric with off-diagonals between the two subspaces as zero. The relative normalizations of the subspaces are kept the same, and we expect main warmup to tune this as well as the off-diagonals. Let main warmup seed the step size itself. Initial parameters of the main warmup are taken from the minimization for systematics and from the last MCMC sample from FD sub-warmup for oscillation parameters. Like FD sub-warmup, warmup is only performed in normal ordering. For main warmup since we anticipate already having a good estimate of the metric, we perform only one long window stage. Too short a window can starve the sampler of enough statistics to improve the estimate of the metric. Warmup already takes a long time, and we don't anticipate a much better solution for the metric after one window. In principle with enough patience, another (longer) window could (marginally) improve the metric estimate.
 \end{enumerate}
 
+One weakness of the method is that the sampler can stay within the systematic minimum that MINUIT found. It is suggested to throw plenty of pseudoexperiments. Although you can never be confident that you've found all of the reasonable minima in systematic space, you can at least reach convergence where throwing new pseudoexperiments doesn't reveal new minima to you.
+
 \subsection{HMC sampling}
-\subsection{Posterior analysis (TODO)}
-\section{In-model (asimov) fake data studies (TODO)}
+After successful HMC warmup, main sampling is straightforward. HMC sampling is performed in parallel with two (potentially simultaneous) parallelization schemes:
+\begin{itemize}
+  \item \textbf{Job parallelization:} Prepare many chains on many nodes - each job has its own allocation of computer memory. Every chain has a unique random seed to prevent preparing identical chains (Stan HMC is deterministic).
+  \item \textbf{Multithreading:} Prepare multiple chains within the same job. Each chain is prepared on its own hardware core. This is always slower than submitting the same number of chains in individual jobs, but multithreading enables chains to share (overhead) memory, increasing the overall memory efficiency. In a memory-bottlenecked cluster situation, multithreading is useful because it allows for using more hardware cores with the same memory allocation, allowing getting more chains prepared at once. Different chains are also randomly seeded such that both job parallelization and multithreading cannot prepare any two chains with the same random seed.
+\end{itemize}
+Every chain's state is seeded from the same HMC warmup. With successful HMC warmup, even two-detector inference takes about one sample per second per job with two chains per job. This means with 200 jobs, 100,000 MCMC samples can be taken in less than an hour and a half. With extrapolation, many samples are taken per second. Every chain is saved individually on disk and can be concatenated later for convergence health checks and posterior analysis.
+
+Both mass orderings are sampled by, for every sample, using the Metropolis acceptance ratio to randomly jump between orderings.
+
+\subsection{Convergence checks (TODO)}
+
+\subsection{Posterior analysis}
+Because all chains were seeded at the same place, all posterior analysis is done with a burnin (of 500, reckoned from trace heatmaps).
+
+The posterior is a high-dimensional object and is therefore difficult to visualize. The most straightforward method to ask questions of the posterior is to prepare marginal distributions (marginals). This is performed in practice by making histograms of one or two parameters at a time from the MCMC chains, marginalizing over the other parameters. Marginals are prepared for samples in normal ordering, inverted ordering, and over both orderings. The preference for either mass ordering is taken as the fraction of samples in that ordering. In addition to marginals reported in mixing angle space (raw from the MCMC), we also prepare marginals transformed into $sin^2(\th{23})$ and $sin^2(2\th{13})$ space.
+
+In fake data studies in this analysis, the shape of the systematic subspace greatly differs between two-detector inference and extrapolation. Whereas with two-detector inferece, many parameters are well-constrained by the ND data and have narrow marginals, extrapolation makes systematic constraints be largely driven by priors, leading to nearly all marginals having diffuse marginals. Therefore, direct comparison of systematic parameter marginals between two-detector inference and extrapolation is useless.
+
+However, especially in the two-detector case, analysis of systematic marginals is fruitful. The primary strength of two-detector is that the systematic marginals reveal a wealth of information about the performance of the systematic model. For the case of in-model fake data in this technote, we learn what systematics are most important in constraining ND data. We also learn about correlations between systematic parameters through their marginalization biases. Plus, two-detector marginals between the systematic and oscillation subspaces are extremely informative regarding correlations between oscillation and systematic parameters and what systematics drive sensitivity to oscillation parameters.
+
+Rather than visualize the posterior in fit parameter space, we can also visualize how the posterior reproduces data spectra. This is called a posterior predictive check. Using uniform draws from the posterior, we check how well simulated data spectra resemble the data spectrum used for inference. With good posterior prediction, simulated data should center near the data spectrum used for inference, and deviations can reveal issues with the sampling or with the model. When comparing two-detector and extrapolation, we use posterior predictive checks to understand how two-detector better constrains the model.
+
+\section{In-model fake data studies (TODO)}
 
 \section{Implementation details}
 
@@ -1284,3 +1345,5 @@ To superimpose marginals in a comparison-plot style, use \texttt{ana::\-Plot\-Sa
 \section{Wishlist for the future}
 
 \end{document}
+
+\todo[inline]{Better MINUIT minimization analysis - it'd be nice to know how much pseudoexperiments are clustering and how many candidate systematic minima are being found}
