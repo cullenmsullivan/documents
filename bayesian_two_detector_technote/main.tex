@@ -1,9 +1,12 @@
 \documentclass{article}
+\usepackage{amsmath}
 \usepackage{fancyvrb}
 \usepackage[left=0.75in,right=0.75in,top=1.25in,bottom=1.25in]{geometry}
 \usepackage{graphicx}
 \usepackage{hyperref}
 \usepackage{lineno}
+\usepackage{relsize}
+\usepackage{todonotes}
 \usepackage{xcolor}
 
 \title{Technote: Bayesian two-detector inference}
@@ -14,6 +17,10 @@
 
 \begin{document}
 
+\newcommand{\dcp}{\ensuremath{\delta_\mathrm{CP}}}
+\newcommand{\dmsq}[1]{\ensuremath{\Delta m^2_{#1}}}
+\renewcommand{\th}[1]{\ensuremath{\theta_{#1}}}
+
 \maketitle
 
 \section{Introduction (TODO)}
@@ -23,19 +30,378 @@
 \section{Motivation (TODO)}
 
 \section{Language quick reference}
-\subsection{Bayesian jargon (TODO)}
-
-\subsection{Cookbooks and recipes}
-Some intentional choices are made regarding names of key structures in the two-detector framework. Unfortunately, "sample" is an overloaded keyword (MCMC sample and counting experiment sub-sample). The solution to disambiguate the ideas in this implementation is to chose a completely different name for sub-samples and explicitly denote MCMC samples as MCMC. We have chosen the following (cute) convention:
+\textbf{Bayesian inference:}
 \begin{itemize}
-    \item A \textbf{Recipe} is a counting experiment sub-sample. In the implementation, a Recipe is fully specified, i.e. it knows what dataset(s) it's loaded from, its selection, its kinematic axes, and how its fake data universe should be prepared during a fake data study.
-    \item A \textbf{Cookbook} is a set of Recipes. The Cookbook is a key analysis structure and is commonly passed around as a parameter. A cookbook is designed to indicate a complete description of how a set of counting experiment sub-samples should be prepared for performing inference.
+  \item The \textbf{Model} is (TODO)
+  \item The \textbf{Data} or \textbf{Observation} is (TODO)
+  \item A \textbf{Posterior} is (TODO)
+  \item A \textbf{Likelihood} is (TODO)
+  \item A \textbf{Prior} is (TODO)
+  \item \textbf{Bayes' Rule} connects (TODO)
+  \item \textbf{Stan} is (TODO)
+  \item \textbf{HMC} is (TODO)
+  \item The \textbf{no U-turn sampler} (NUTS) sampler algorithm is (TODO)
+  \item The \textbf{typical set} (TODO)
+  \item The \textbf{metric} is (TODO)
+  \item The \textbf{Step size} is (TODO)
+  \item A \textbf{leapfrog step} is (TODO)
+  \item HMC \textbf{Warmup} is (TODO)
+  \item HMC main \textbf{Sampling} is (TODO)
+  \item \textbf{Autocorrelation} is (TODO)
 \end{itemize}
 
-\section{Subsample configurations (TODO)}
+\textbf{Two-detector-specific jargon}
+Some intentional choices are made regarding names of key structures in the two-detector framework. Unfortunately, "sample" is an overloaded keyword (MCMC sample and counting experiment sub-sample). One solution to disambiguate the ideas is to chose a completely different name for sub-samples and explicitly denote MCMC samples as MCMC. We have chosen the following (intentionally cute) convention:
+\begin{itemize}
+  \item A \textbf{Recipe} is a counting experiment sub-sample. In the implementation, a Recipe is fully specified, i.e. it knows what dataset(s) it's loaded from, its selection, its kinematic axes, and how its fake data universe should be prepared during a fake data study.
+  \item A \textbf{Cookbook} is a set of Recipes. The Cookbook is a key analysis structure and is commonly passed around as a parameter. A cookbook is designed to indicate a complete description of how a set of counting experiment sub-samples should be prepared for performing inference.
+\end{itemize}
 
-\section{Procedures and techniques}
+\textbf{Miscellaneous jargon}
+\begin{itemize}
+  \item An \textbf{Indiana Jobes} (IJ) prediction is one that has undergone the IJ technique to swap ND data spectra inside extrapolated predictions. For a fake data study, re-loading FD extrapolated predictions from scratch just to change the ND NuMI data spectrum is effective albeit inefficient and cumbersome. The IJ method takes new data spectra to inject, goes inside ROOT files with FD predictions, and replaces the data spectra. See Section \ref{sec:preparing_extrapolated_predictions_using_fake_nd_data} for details about the method.
+\end{itemize}
 
+\section{Procedures and techniques (TODO)}
+
+\subsection{Subsample configurations (TODO)}
+\todo[inline]{The section on Maria's topological samples needs more detail and plots. At minimum, nominal predictions in 2D Q3Q0/ThetaLepE space. Needs detail about kinematic axes and the systematics that samples are designed to constrain. Bonus points if we include the plots that break down the topological samples by interaction mode.}
+All studies in this technote use CV-tuned prod5.1 nominal ND and FD MC. We use the following SAM definitions (pointing to concats) for ND nominal predictions and reweightable systematics:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.a_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_v1_numu2020
+prod_sumdecaf_development_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_v1_nue2020prod5.1
+prod_sumdecaf_development_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_v1_numu2020prod5.1
+prod_sumdecaf_development_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_v1_nue2020prod5.1
+\end{verbatim}}
+For FD nominal predictions and reweightable systematics:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.j.l_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.j.l_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.j.l_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.j.l_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.j_fd_genie_N1810j0211a_tauswap_fhc_nova_v08_full_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.j_fd_genie_N1810j0211a_tauswap_fhc_nova_v08_full_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.j.l_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.j.l_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.j.l_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.j.l_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.j_fd_genie_N1810j0211a_tauswap_rhc_nova_v08_full_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.j_fd_genie_N1810j0211a_tauswap_rhc_nova_v08_full_v1_nue2020
+\end{verbatim}}
+For FD cosmics (note that these definitions don't have the bad cosmics removed, but we don't anticipate this to change any conclusions from the technote):
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.q.t_fd_cosmic_fhc_allperiods_v1_goodruns_nostale_numu2024
+prod_sumdecaf_R20-11-25-prod5.1reco.q.t_fd_cosmic_fhc_allperiods_v1_goodruns_nostale_nue2024
+prod_sumdecaf_R20-11-25-prod5.1reco.q.t_fd_cosmic_rhc_allperiods_v1_goodruns_nostale_numu2024
+prod_sumdecaf_R20-11-25-prod5.1reco.q.t_fd_cosmic_rhc_allperiods_v1_goodruns_nostale_nue2024
+\end{verbatim}}
+\todo[inline]{A rerun of the study for prod5.1 should instead use:}
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.q.t_fd_cosmic_fhc_allperiods_v1_goodruns_nostale_bad_cosmics_removed_numu2024v2
+prod_sumdecaf_R20-11-25-prod5.1reco.q.t_fd_cosmic_fhc_allperiods_v1_goodruns_nostale_bad_cosmics_removed_nue2024v2
+prod_sumdecaf_R20-11-25-prod5.1reco.q.t_fd_cosmic_rhc_allperiods_v1_goodruns_nostale_bad_cosmics_removed_numu2024v2
+prod_sumdecaf_R20-11-25-prod5.1reco.q.t_fd_cosmic_rhc_allperiods_v1_goodruns_nostale_bad_cosmics_removed_nue2024v2
+\end{verbatim}}
+For ND NuMI data, we use:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.l.u_nd_numi_fhc_full_v1_goodruns_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l.u_nd_numi_fhc_full_v1_goodruns_nue2020
+prod_sumdecaf_development_nd_numi_rhc_full_v1_goodruns_numu2020
+prod_sumdecaf_development_nd_numi_rhc_full_v1_goodruns_nue2020
+\end{verbatim}}
+For file-based systematics, we use for \texttt{Calibration\_ND} $-1\sigma$:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.e_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_calibdown_v1_batch2_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.e_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_calibdown_v1_batch2_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.e_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_calibdown_v1_batch3_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.e_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_calibdown_v1_batch3_nue2020
+\end{verbatim}}
+For \texttt{Calibration\_ND} $+1\sigma$:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.e_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_calibup_v1_batch2_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.e_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_calibup_v1_batch2_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.e_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_calibup_v1_batch3_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.e_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_calibup_v1_batch3_nue2020
+\end{verbatim}}
+For \texttt{Calibration\_FD} $-1\sigma$:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_calibdown_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_calibdown_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_calibdown_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_calibdown_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_calibdown_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_calibdown_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_calibdown_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_calibdown_v1_nue2020
+\end{verbatim}}
+For \texttt{Calibration\_FD} $+1\sigma$:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_calibup_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_calibup_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_calibup_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_calibup_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_calibup_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_calibup_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_calibup_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_calibup_v1_nue2020
+\end{verbatim}}
+For \texttt{CalibShape} $+1\sigma$:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_calibshape_v1_batch2_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_calibshape_v1_batch2_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_calibshape_v1_batch3_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_calibshape_v1_batch3_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_calibshape_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_calibshape_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_calibshape_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_calibshape_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_calibshape_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_calibshape_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_calibshape_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_calibshape_v1_nue2020
+\end{verbatim}}
+For \texttt{Cherenkov} $-1\sigma$:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_ckvdown_v1_batch2_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_ckvdown_v1_batch2_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_ckvdown_v1_batch3_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_ckvdown_v1_batch3_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_ckvdown_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_ckvdown_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_ckvdown_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_ckvdown_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_ckvdown_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_ckvdown_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_ckvdown_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_ckvdown_v1_nue2020
+\end{verbatim}}
+For \texttt{Cherenkov} $+1\sigma$:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_ckvup_v1_batch2_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_ckvup_v1_batch2_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_ckvup_v1_batch3_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_ckvup_v1_batch3_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_ckvup_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_ckvup_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_ckvup_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_ckvup_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_ckvup_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_ckvup_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_ckvup_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_ckvup_v1_nue2020
+\end{verbatim}}
+For \texttt{CalibDrift} $+1\sigma$:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_detectorageing_v1_batch2_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_detectorageing_v1_batch2_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_detectorageing_v1_batch3_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.f_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_detectorageing_v1_batch3_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_detectoraging_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_detectoraging_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_detectoraging_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_detectoraging_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_detectoraging_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_detectoraging_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_detectoraging_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.l_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_detectoraging_v1_nue2020
+\end{verbatim}}
+For \texttt{LightLevel\_ND} $+1\sigma$:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.g_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_lightlevelup_v1_batch2_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.g_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_lightlevelup_v1_batch2_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.g_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_lightlevelup_v1_batch3_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.g_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_lightlevelup_v1_batch3_nue2020
+\end{verbatim}}
+For \texttt{LightLevel\_ND} $-1\sigma$:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.g_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_lightleveldown_v1_batch2_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.g_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_lightleveldown_v1_batch2_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.g_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_lightleveldown_v1_batch3_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.g_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_lightleveldown_v1_batch3_nue2020
+\end{verbatim}}
+For \texttt{LightLevel\_FD} $-1\sigma$:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_lightleveldown_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_lightleveldown_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_lightleveldown_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_lightleveldown_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_lightleveldown_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_lightleveldown_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_lightleveldown_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_lightleveldown_v1_nue2020
+\end{verbatim}}
+For \texttt{LightLevel\_FD} $+1\sigma$:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_lightlevelup_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_lightlevelup_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_lightlevelup_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_fluxswap_fhc_nova_v08_full_lightlevelup_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_lightlevelup_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_lightlevelup_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_lightlevelup_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.o_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_lightlevelup_v1_nue2020
+\end{verbatim}}
+For \texttt{NeutronMENATEFileSyst}:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R20-11-25-prod5.1reco.t_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_menate_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.t_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_menate_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.t_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_menate_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.t_nd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_menate_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.t_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_menate_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.t_fd_genie_N1810j0211a_nonswap_rhc_nova_v08_full_menate_v1_nue2020
+prod_sumdecaf_R20-11-25-prod5.1reco.t_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_menate_v1_numu2020
+prod_sumdecaf_R20-11-25-prod5.1reco.t_fd_genie_N1810j0211a_fluxswap_rhc_nova_v08_full_menate_v1_nue2020
+\end{verbatim}}
+
+Weights for all MC predictions are:
+{\smaller\begin{verbatim}
+ana::kXSecCVWgt2024 * ana::kPPFXFluxCVWgt * ana::kAddShieldingBlockWgt * ana::kProd5GenieSkewFix
+\end{verbatim}}
+Note: For a future two-detector analysis on prod6, we are targeting \textbf{not using a XSec CV tune}.
+
+FD recipes use the same selections as the official 2024 3F analysis:
+\begin{itemize}
+  \item FD numu samples: \texttt{ana::\-kNumu2024FD} and Ehad quantile cuts.
+  \item FD nue high PID samples: \texttt{ana::\-kNue2024FD} and \texttt{ana::\-kCVNe\_\-looseptp >= ana::\-kNue\-2024\-CVNe\-(FHC/\-RHC)\-High\-Edge}.
+  \item FD nue low PID samples: \texttt{ana::\-kNue2024FD} and \texttt{ana::\-kCVNe\_\-looseptp < ana::\-kNue\-2024\-CVNe\-(FHC/\-RHC)\-High\-Edge \&\& ana::\-kCVNe\_\-looseptp >= ana::\-kNue\-2024\-CVNe\-(FHC/\-RHC)\-Low\-Edge}.
+  \item FD nue peripheral samples: \texttt{ana::\-kNue\-2024\-FD\-Peripheral}.
+  \item FD low energy nue sample: \texttt{ana::\-kNue\-2024\-FD\-LE}.
+\end{itemize}
+
+Unlike in the official 2024 3F analysis, rather than use the logical analysis binning for FD nue samples, we've instead split the high PID, low PID, and peripheral samples into their own recipes each using reconstructed nue energy as a kinematic axis. We treat the FD numu and low energy nue sample identically to the 2024 3F analysis.
+
+\subsection{Preparation of sub-samples}
+The configuration of a two-detector inference analysis is as follows:
+\begin{itemize}
+  \item FD samples are non-extrapolated (\texttt{ana::\-Prediction\-No\-Extrap}) because, rather than extrapolate predictions to hide systematic variations in the FD, we intend to constrain systematic parameters using the ND sub-samples during sampling. We do not load the non-extrapolated FD predictions in pT quantiles.
+  \item As a two-detector inference analysis is flexible, the ND sub-samples can be configured in any way that reasonably constrains the systematic parameters.
+\end{itemize}
+
+Throughout this technote, two-detector ND sub-samples are configured as (nearly) Maria's \textbf{topological samples} \cite{ref:maria_thesis}. Sub-samples are selected using cuts in prongCVN space and are defined as:
+\begin{itemize}
+  \item $\mu^-$ (FHC): Strictly one fuzzyk prong, and it has a prongCVN muon score $> 0.5$.
+  \item $\mu^- + p$ (FHC): Strictly two fuzzyk prongs. One has a prongCVN muon score $> 0.5$ and one has a proton score $> 0.5$.
+  \item $\mu^- + \pi + X$ (FHC): At least two fuzzyk prongs. At least one has a prongCVN muon score $>0.5$ and at least one has a charged pion score $> 0.7$.
+  \item $\mu^- + p + X$ (FHC): At least three fuzzyk prongs. At least one has a prongCVN muon score $>0.5$, at least one with a proton score $> 0.5$, and no prongs with charged pion score $>0.7$.
+  \item Numu Everything else (FHC): Any FHC event that passes the numu event selection but passes none of the numu FHC topological cuts.
+  \item $e^- + X$ (FHC): Any FHC event that passes the ND nue event selection.
+  \item $\mu^+$ (RHC): Same as $\mu^-$ (FHC).
+  \item $\mu^+ + p$ (RHC): Same as $\mu^- + p$ (FHC).
+  \item $\mu^+ + \pi + X$ (RHC): Same as $\mu^- + \pi + X$ (FHC)
+  \item $\mu^+ + X$ (RHC): At least three fuzzyk prongs. At least one has a prongCVN muon score $>0.5$ and no prongs with charged pion score $>0.7$.
+  \item Numu everything else (RHC): Any RHC event that passes the numu event selection but passes none of the numu RHC topological cuts.
+  \item $e^+ + X$ (RHC): Any RHC event that passes the ND nue event selection.
+\end{itemize}
+where the ND numu event selection is \texttt{ana::\-kNumu\-2024\-ND}, and the ND nue event selection is \texttt{ana::\-kNue\-2024\-ND} (the same as the 2024 3F analysis).
+
+Systematic variations are loaded from MC as separate sub-predictions and merged into an \texttt{ana::\-Prediction\-Interp} in post-processing.
+
+Extrapolated FD samples are prepared in this analysis very similarly to those used for the official 2024 3F analysis. We try to reproduce this analysis (with fake FD data) as a benchmark for comparing sensitivity of the two-detector method to oscillation parameters to the extrapolation technique.
+
+For extrapolated predictions, proportional decomposition is used for simplicity. We load and extrapolate numu and nue samples in pT quants then sum them together in postprocessing. Final post-processed extrapolated predictions have the same kinematic axes, selections, weights, statistics, exposures, and livetimes as non-extrapolated predictions used for two-detector analyses. By default, extrapolated predictions are loaded with real ND NuMI data which can be swapped out in a fake data study.
+
+\subsection{Systematic freedom of the analysis}
+Table \ref{tab:systematic_freedom} indicates which systematic parameters are used in two-detector and extrapolation analyses. All systematics tabulated are used in both analyses except for an exception with detector calibration.
+
+In typical extrapolation analyses, detector calibration uncertainties are treated as correlated (\texttt{Calibration} or also known as "absolute calibration") and anticorrelated (\texttt{Relative\-Calib}) components. This way, weights can be extrapolated from the ND to the FD in a way that could not be done with uncorrelated uncertainties. However for two-detector, treating calibration (in general, \textit{any}) parameters as correlated and anticorrelated can break the NUTS HMC algorithm. Figure \ref{fig:calibration_chi2_traces}, $\chi^2$ traces quantifying the impact of uncorrelated calibration systematics while others are held at 0, show why this is an issue. Because the ND has much higher statistics than the FD, the $chi^2$ (and therefore likelihood) gradient is much steeper for \texttt{Calibration\_\-ND} than for \texttt{Calibration\_\-FD}. The shape of the likelihood surface is largely driven by \texttt{Calibration\_\-ND}. When these are transformed to (anti)correlated space, this creates a nearly perfect degeneracy between \texttt{Calibration} and \texttt{Relative\-Calib} because the FD samples do not pull strong enough to break the degeneracy in ND samples. In likelihood space, this manifests as a continuous valley in the 2D calibration (anti)correlated subspace. The problem situation is where the sampling pseudoparticle is given a random momentum largely along the valley where it will continue for a large distance without turning around. Not only does HMC warmup not handle valleys well (no metric solution can help the sampler explore their geometry), the large distance the particle needs to traverse usually results in a divergence and unhealthy sampling. \textbf{To avoid the issue entirely, we perform two-detector inference in uncorrelated space and extrapolation analysis in (anti)correlated space.}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/chi2_traces/prod51_ndTopological_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024/Calibration_ND_chi2.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/chi2_traces/prod51_fdEhadQuants_OfficialFD_nomFake_two_det_2024/asimovA_asimovA_two_det_2024/Calibration_FD_chi2.png}
+\end{minipage}
+\caption{$\chi^2$ traces of uncorrelated calibration systematics. All other knobs are held at 0 while we scan each knob individually. \textbf{Left:} $\chi^2$ trace over all sub-samples for \texttt{Calibration\_\-ND} for the cookbook, \texttt{prod51\_\-ndTopological\_\-NumuQ3Q0NueThetaLepE\_nomFake} (prod5.1, ND samples in topological space where numu use Q3Q0 and nue use electron angle and energy binning, nominal prediction with no other systematic variation). \textbf{Right:} $\chi^2$ trace over all sub-samples for \texttt{Calibration\_\-FD} for the cookbook, \texttt{prod51\_\-fdEhadQuants\_\-OfficialFD\_\-nomFake} (typical prod5.1 non-extrapolated FD predictions used for two-detector inference). Notice the difference in scale between the (higher statistics) ND and FD.}
+\label{fig:calibration_chi2_traces}
+\end{figure}
+
+We load file-based predictions uncorrelated (as \texttt{Calibration\_\-ND} and \texttt{Calibration\_\-FD}) and then also save the predictions as correlated and anticorrelated systematics. For the ND and FD, \texttt{Calibration} is the same prediction as \texttt{Calibration\_\-ND} and \texttt{Calibration\_\-FD} respectively. For the ND, \texttt{Relative\-Calib} is the same as \texttt{Calibration\_\-ND} except with pulls inverted. For the FD, \texttt{Relative\-Calib} is the same as \texttt{Calibration\_\-FD}. Any other correlated/anticorrelated systematics can be managed in the same fashion. The uncorrelated calibration systematics and the (anti)correlated calibration systematics each form a basis of variations that span the same space. This implies that there is a two-way mapping from each basis to the other and that both parametrizations have the same systematic freedom. Both of these properties are necessary for an apples-to-apples comparison fake data study between extrapolation and two-detecor. When throwing fake systematic variations, we implement the mapping between bases to ensure that the fake systematic universe is the same as seen by extrapolation and two-detector. We throw random systematic variations in uncorrelated space, and when querying the true systematic pull for an (anti)correlated systematic, we implement the mapping as:
+\begin{equation}
+\begin{split}
+\sigma_{\mathrm{Calibration}} = \frac{1}{2} ( \sigma_{\mathrm{Calibration\_FD}} + \sigma_{\mathrm{Calibration\_ND}} ) \\
+\sigma_{\mathrm{AbsCalib}} = \frac{1}{2} ( \sigma_{\mathrm{Calibration\_FD}} - \sigma_{\mathrm{Calibration\_ND}} )
+\end{split}
+\end{equation}
+
+\begin{table}[hbt]
+\centering
+{\smaller
+\begin{tabular}{llll}
+Beam                               & RES                                & MEC                                    & DIS ($\nu$ $\pi$ production) \\
+\texttt{ppfx\_hadp\_pc00}          & \texttt{LowQ2RESSupp2020}          & \texttt{MECShape2024Nu}                & \texttt{DISvpCC0pi\_2020} \\
+\texttt{ppfx\_hadp\_pc00}          & \texttt{RESDeltaScaleSyst}         & \texttt{MECShape2024AntiNu}            & \texttt{DISvpCC1pi\_2020} \\
+\texttt{ppfx\_hadp\_pc00}          & \texttt{RESvpvnRatioNuXSecSyst}    & \texttt{MECEnuShape2020Nu}             & \texttt{DISvpCC2pi\_2020} \\
+\texttt{ppfx\_hadp\_pc00}          & \texttt{RESvpvnRatioNubarXSecSyst} & \texttt{MECEnuShape2020AntiNu}         & \texttt{DISvpCC3pi\_2020} \\
+                                   & \texttt{MaCCRES}                   & \texttt{MECInitStateNPFrac2020Nu}      & \texttt{DISvpNC0pi\_2020} \\
+QE                                 & \texttt{MvCCRES}                   & \texttt{MECInitStateNPFrac2020AntiNu}  & \texttt{DISvpNC1pi\_2020} \\
+\texttt{RPAShapeenh2020}           & \texttt{MaNCRES}                   &                                        & \texttt{DISvpNC2pi\_2020} \\
+\texttt{RPAShapesupp2020}          & \texttt{MvNCRES}                   & DIS (model knobs)                      & \texttt{DISvpNC3pi\_2020} \\
+\texttt{ZNormCCQE}                 & \texttt{RDecBR1gamma}              & \texttt{DISNuHadronQ1Syst}             & \texttt{DISvnCC0pi\_2020} \\
+\texttt{ZExpAxialFFSyst2020\_EV1}  & \texttt{RDecBR1eta}                & \texttt{DISNuBarHadronQ0Syst}          & \texttt{DISvnCC1pi\_2020} \\
+\texttt{ZExpAxialFFSyst2020\_EV2}  & \texttt{Theta\_Delta2Npi}          & \texttt{AhtBY}                         & \texttt{DISvnCC2pi\_2020} \\
+\texttt{ZExpAxialFFSyst2020\_EV3}  &                                    & \texttt{BhtBY}                         & \texttt{DISvnCC3pi\_2020} \\
+\texttt{ZExpAxialFFSyst2020\_EV4}  & COH                                & \texttt{CV1uBY}                        & \texttt{DISvnNC0pi\_2020} \\
+\texttt{MaNCEL}                    & \texttt{COHCCScale2018}            & \texttt{CV2uBY}                        & \texttt{DISvnNC1pi\_2020} \\
+\texttt{EtaNCEL}                   & \texttt{COHNCScale2018}            & \texttt{AGKYxF1pi}                     & \texttt{DISvnNC2pi\_2020} \\
+                                   &                                    & \texttt{AGKYpT1pi}                     & \texttt{DISvnNC3pi\_2020} \\
+DIS ($\bar{\nu}$ $\pi$ production) & FSI                                &                                        & \\
+\texttt{DISvbarpCC0pi\_2020}       & \texttt{hNFSI\_FateFracEV1\_2024}  & Radiative                              & GENIE PCA \\
+\texttt{DISvbarpCC1pi\_2020}       & \texttt{hNFSI\_FateFracEV1\_2024}  & \texttt{radcorrnue}                    & \texttt{genie\_small\_pc00} \\
+\texttt{DISvbarpCC2pi\_2020}       & \texttt{hNFSI\_FateFracEV1\_2024}  & \texttt{radcorrnuebar}                 & \texttt{genie\_small\_pc01} \\
+\texttt{DISvbarpCC3pi\_2020}       & \texttt{hNFSI\_MFP\_2024}          & \texttt{2ndclasscurr}                  & \texttt{genie\_small\_pc02} \\
+\texttt{DISvbarpNC0pi\_2020}       &                                    &                                        & \texttt{genie\_small\_pc03} \\
+\texttt{DISvbarpNC1pi\_2020}       & Muon energy                        & Detector                               & \texttt{genie\_small\_pc04} \\
+\texttt{DISvbarpNC2pi\_2020}       & \texttt{UnCorrMuCatMuESyst2024}    & \texttt{Detector}                      & \texttt{genie\_small\_pc05} \\
+\texttt{DISvbarpNC3pi\_2020}       & \texttt{CorrMuEScaleSyst2024}      & \texttt{CalibShape}                    & \texttt{genie\_small\_pc06} \\
+\texttt{DISvbarnCC0pi\_2020}       & \texttt{UnCorrFDMuEScaleSyst2024}  & \texttt{CalibDrift}                    & \texttt{genie\_small\_pc07} \\
+\texttt{DISvbarnCC1pi\_2020}       & \texttt{UnCorrNDMuEScaleSyst2024}  & \texttt{Cherenkov}                     & \texttt{genie\_small\_pc08} \\
+\texttt{DISvbarnCC2pi\_2020}       & \texttt{PileupMuESyst2024}         & \texttt{NeutronMENATEFileSyst}         & \texttt{genie\_small\_pc09} \\
+\texttt{DISvbarnCC3pi\_2020}       &                                    & \texttt{Light\_Level\_ND}              & \texttt{genie\_small\_pc10} \\
+\texttt{DISvbarnNC0pi\_2020}       & Prong angle                        & \texttt{Light\_Level\_FD}              & \texttt{genie\_small\_pc11} \\
+\texttt{DISvbarnNC1pi\_2020}       & \texttt{ProngAngleSystFDXZ2021}    & \texttt{Calibration\_ND}               & \\
+\texttt{DISvbarnNC2pi\_2020}       & \texttt{ProngAngleSystFDYZ2021}    & \texttt{Calibration\_FD}               & Tau scale \\
+\texttt{DISvbarnNC3pi\_2020}       & \texttt{ProngAngleSystNDXZ2021}    & \texttt{Calibration}                   & \texttt{NuTauScale} \\
+                                   & \texttt{ProngAngleSystNDYZ2021}    & \texttt{RelativeCalib}                 &
+\end{tabular}
+}
+\caption{Systematic parameters used in two-detector and extrapolation analyses.}
+\label{tab:systematic_freedom}
+\end{table}
+
+\subsection{Preparing fake data}
+In this technote, "in-model" fake data refers to fake data that can be generated by turning systematic knobs and by choosing some oscillation parameters. Only standard 3F neutrino oscillations are considered, but in general, the two-detector method could be extended to other BSM searches. Because the purpose of this technote is to evaluate the sensitivity of the two-detector technique in the best case (perfectly predictive ND model), only in-model studies are performed.
+
+For two-detector ND sub-samples, fake data spectra are generated on-the-fly inside analysis macros using the NuMI prediction. For the FD, fake data are generated on-the-fly inside analysis macros using the NuMI prediction and the cosmic background prediction. Currently, no rock event prediction is performed. Fake data at "nominal" means using the prediction of an \texttt{ana::\-Prediction\-Interp} with all systematic knobs at 0, not the nominal prediction. This technique has the convenient property that the nominal prediction has $\chi^2 = 0$ exactly with all knobs at zero which is not true for using the nominal prediction inside the \texttt{ana::\-Prediction\-Interp} because of interpolation inefficiency.
+
+Extrapolated samples have fake data generated on-the-fly identically to non-extrapolated samples except with an extra step. By default, extrapolated samples are loaded with real NuMI data used for computing decomposition/extrapolation weights. For an apples-to-apples fake data study comparing with two-detector, we must replace the real ND data with fake data generated using the same fake data universe used elsewhere in the study. We execute this replacement using the Indiana Jones technique (see Section \ref{sec:preparing_extrapolated_predictions_using_fake_nd_data}).
+
+\subsection{HMC warmup}
+Now that loading the predictions and (fake) data is complete, we've finished preparing the model. We're now ready to perform inference with Stan HMC. Before taking MCMC samples that we'll use for inference, we must first warm up the sampler. In warmup, the sampler adapts itself to the geometry of the parameter space by tuning a step size (used for numerical integration of simulated trajectories), a metric (like a topological metric that warps space for exploring a simpler geometry), and the position state of the sampler to the typical set. Stan HMC chooses a unit diagonal metric as an initial ansatz and iteratively tune it through warmup. Stan HMC warmup has three phases:
+\begin{enumerate}
+  \item \textbf{Initial buffer:} Allowing the step size to be adapted but keeping the metric at its seed, allow the pseudoparticle to converge to the typical set. This is similar to a clever gradient descent to allow the sampler to fall into minima of the likelihood surface. This is spiritually similar to burnin in $\mathrm{MR^2T^2}$ MCMC sampling.
+  \item \textbf{Window:} Collect MCMC samples in the typical set to compute an appropriate metric to more efficiently sample the parameter space. The step size is continuously updated. Multiple windows are allowed: The first window will be the shortest (to get a rough idea of the metric quickly), and subsequent windows will grow longer (to fine-tune the metric as we sample better and better).
+  \item \textbf{Terminal buffer:} Continue tuning the step size while keeping the metric fixed. This is also a last chance to converge to the typical set with a good solution for the metric.
+\end{enumerate}
+
+Performing HMC warmup for extrapolation is simpler than for two-detector because the geometry of the systematic parameter space is much simpler for extrapolation. Most systematic parameters are Gaussian-like, largely uncorrelated, and driven by the prior. Because the initial guess of the metric is good enough to sample healthily enough to compute an appropriate metric after the first window, we perform HMC warmup with extrapolated samples "raw" without any seeding. We use a dense metric to expose information about correlations between systematics. For extrapolation, the joint metric for oscillation parameters and systematic parameters is tuned all at once.
+
+Two-detector inference, however, has a systematic parameter space that's much more complicated than for extrapolation because the topological ND samples show shape differences when pulling on systematic knobs that create complicated correlations between systematic parameters. Also importantly, the constrained variances of systematics vary widely, so the uniform unit diagonal inefficiently samples on systematic axes that are well-constrained (the pseudoparticle travels too far on that axis). With the full set of systematics, the sampler is unable to converge to the metric using the "raw" sampling technique.
+
+Note that this issue is completely orthogonal to the slow likelihood query problem. The time required to compute the log likelihood is independent of the complexity of the geometry of the parameter space. Use of the dense metric assists greatly in exploring the complex geometry, but it is difficult to tune because it has so many degrees of freedom (the number of parameters squared). Stan HMC calls identifies this as a "chicken and egg problem" - the metric is necessary for well tuned-sampling, but well-tuned sampling is required to tune the metric.
+
+To compute the metric for two-detector inference, we use a multi-stage warmup technique that leverages the fact that the inverse metric is identical to the covariance matrix drawn from the typical set:
+\begin{enumerate}
+  \item \textbf{Covariance estimation:} Perform frequentist gradient descent of systematic parameters only using ND sub-samples using MINUIT over many pseudoexperiments to find a good minimum of the parameter space. We extract the covariance matrix around the minimum.
+  \item \textbf{FD sub-warmup:} Perfom typical Stan HMC over the oscillation parameters only using FD sub-samples.
+  \item \textbf{Main warmup:} (TODO)
+\end{enumerate}
+
+\subsection{HMC sampling}
+\subsection{Posterior analysis (TODO)}
 \section{In-model (asimov) fake data studies (TODO)}
 
 \section{Implementation details}
@@ -51,6 +417,7 @@ All code to execute two-detector Bayesian inference analyses lives in \href{http
     \item \textbf{sampling:} (Macros) Contains methods for estimating the posterior for Bayesian two-detector inference using HMC with the Stan sampler. Includes methods to make warmup efficiently
     \item \textbf{Studies:} (TODO am I keeping this area?)
 \end{itemize}
+\todo[inline]{Are we keeping the Studies area?}
 
 \subsection{Core library documentation}
 The two-detector inference architecture relies on a consistent structure for declaring how sub-samples are configured. The primary objective of the structures of the inference analysis is to provide a log likelihood as a function of PMNS oscillation parameters and systematic variations. However, there are many valid ways to configure the sub-samples. The core structures are designed with the following implementation goals in mind:
@@ -70,7 +437,7 @@ Two-detector library code lives in the \texttt{twodet} namespace.
     \item The \texttt{Recipe} is a structure that indicates completely how a \texttt{FinalState} is configured in a particular analysis. It wraps a single \texttt{FinalState} and includes kinematic axes, a selection, and a production. It includes a \texttt{IDiskReader} which is used to find ROOT files containing MC, data, and cosmic spectra. \texttt{Recipe}s are typically constructed on-the-fly during the start of a program with a \texttt{Cookbook} constructor, but they can also be constructed manually (See \texttt{Recipe::Factory}). \texttt{Recipe}s internally lazily load and cache NuMI prediction objects, NuMI data spectra, and cosmic predictions. \texttt{Recipe}s integrate with \texttt{Cookbooks} using the \texttt{RecipeProxy} wrapper which reference counts \texttt{Recipe} objects allowing identical predictions or data spectra to be only loaded into memory once.
     \item The \texttt{Cookbook} is a high-level structure which acts as a collection (set) of \texttt{Recipe}s. It inherits from \texttt{std::list}, and \texttt{RecipeProxy} knows how to implicitly convert to \texttt{const Recipe\&}, so cookbooks can be iterated over as
 \begin{verbatim}
-  for ( const Recipe\& recipe : cookbook ) { <do things per recipe> }}
+  for ( const Recipe& recipe : cookbook ) { <do things per recipe> }}
 \end{verbatim}
       Cookbooks have short names and are unique (belong with \texttt{ana::Registry<Cookbook>}). Cookbooks can be declared in read-only memory and looked up later using the registry or constructed on-the-fly during program startup (as in the Bayesian specification). The primary method of indicating how sub-samples are prepared is to pass a cookbook (either by reference or name) to analysis code and macros.
 \end{itemize}
@@ -146,7 +513,7 @@ In extrapolation analyses, the systematic subspace of the posterior is not very 
 
 \subsection{The plotting library (TODO this is still under construction)}
 
-\section{How-to: Step-by-step instructions to perform an inference analysis (TODO include plots step-by-step to show diagnostic outputs)}
+\section{How-to: Step-by-step instructions to perform an inference analysis}
 This section will walk you through how to a perform a Bayesian two-detector inference analysis starting from the CAFs and ending at marginal distributions of the posterior. As an example, we will extract the posterior for a two-detector randomly systematically varied fake data study at asimov A using ND numu samples in Q3Q0 space and ND nue samples in ThetaLepE space using the 2024 two-detector list of systematics. The analysis cookbook for this configuration is:
 \begin{verbatim}
     prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0
@@ -207,7 +574,7 @@ Reweightable systematics are split into loading groups which are implemented as 
 
 File-based systematic variations are loaded using \texttt{Load\-File\-Based\-Predictions\-.C} on Fermigrid. It encodes the mapping of systematic name and sigma to a file-based loader. Predictions for detector calibration are loaded uncorrelated, then after spectra are loaded, the correlated and anticorrelated predictions are saved to file too.
 
-\subsection{Post-processing systematically shifted non-extrapolated MC (TODO document squashing)}
+\subsection{Post-processing systematically shifted non-extrapolated MC}
 Minimal post-processing first involves merging the outputs using something like \texttt{hadd\_cafana}. However, managing the sheer number of sub-predictions alone is challenging. \texttt{shell\_\-functions\-.sh} contains functions to assist in finding problems with grid outputs and with merging them. To find small files (which are indicated by smaller file size than successful jobs), use \texttt{get\_bad\_output}. As an example,
 \begin{verbatim}
 get_bad_output 5000 beam/*.root
@@ -230,7 +597,7 @@ done
 \end{verbatim}
 If you are on a cluster supporting slurm and merging is taking forever, the CAFAna macro, \texttt{loading/\-Merge\-Grid\-Outputs\-Parallel\-.C} will instead accept a cookbook to inform what recipe names to look for and will output a command script that will submit batches of jobs to slurm that each parallelize some of the grid outputs.
 
-Then, the outputs split by systematic group need to be merged into an \texttt{ana::Prediction\-Interp}. The CAFAna macro, \texttt{loading/\-Merge\-Into\-Prediction\-Interp\-.C} will do this given a cookbook and your input directory (whatever you called "(YOUR DESTINATION DIRECTORY)" during the output merging step). The macro will automatically save the merged \texttt{ana::PredictionInterp} objects to whatever filepaths the recipe's disk readers will use for analysis. On a slurm cluster, you can use \texttt{loading/-Merge\-Into\-Prediction\-Interp\-Parallel\-.C} to instead write slurm commands to execute this step in parallel.
+Then, the outputs split by systematic group need to be merged into an \texttt{ana::Prediction\-Interp}. The CAFAna macro, \texttt{loading/\-Merge\-Into\-Prediction\-Interp\-.C} will do this given a cookbook and your input directory (whatever you called "(YOUR DESTINATION DIRECTORY)" during the output merging step). The macro will automatically save the merged \texttt{ana::PredictionInterp} objects to whatever filepaths the recipe's disk readers will use for analysis. On a slurm cluster, you can use \texttt{loading/\-Merge\-Into\-Prediction\-Interp\-Parallel\-.C} to instead write slurm commands to execute this step in parallel.
 
 To query what your new systematically-shifted samples look like, use \texttt{diagnositc\-/Plot\-Syst\-Pulls\-.C} to plot $+1\sigma$ and $-1\sigma$ variations for every systematic you loaded for every recipe (see Figure \ref{fig:systematically_shifted_spectra_example}). This output is not only useful as a diangostic to sanity check your outputs but also to get a feel for how much constraining power your ND samples will have on each systematic. In the case of \texttt{MaCCRES}, this output indicates a strong constraint because of its strong shape-dependent effect on multiple topologies.
 
@@ -249,7 +616,7 @@ To query what your new systematically-shifted samples look like, use \texttt{dia
 \end{figure}
 
 \subsection{Squashing two-detector ND predictions}
-Performing inference on 2D ND topological samples will achieve the correct answer, but many bins in these samples are empty (in Q3Q0 space, the upper left corner, $Q^2 < 0$, is kinematically forbidden, and the bottom right corner is typically underpopulated.). In practice, this means the sampler will spend time computing zero counts against zero predicted counts over many bins over many samples. As a sampling optimization, we perform a technique we have called "squashing" where we explicitly remove empty bins for predictions and data used as fit inputs. This method will not change any likelihood queries on ND predictions because the sampler only cares about bin \textit{counts}, not bin \textit{locations}. As all of the kinematic physics are already baked into the cross section, systematic, and other models, transforming the logical bin indices will do nothing to the likelihood query itself.
+Performing inference on 2D ND topological samples will achieve the correct answer, but many bins in these samples are empty (in Q3Q0 space, the upper left corner, $Q^2 < 0$, is kinematically forbidden, and the bottom right corner is typically underpopulated.). In practice, this means the sampler will spend time computing zero counts against zero predicted counts over many bins over many samples. As a sampling optimization, we perform a technique we have called "squashing" where we explicitly remove empty bins for predictions and data used as fit inputs. This method will not change any likelihood queries on ND predictions because the sampler only cares about bin \textit{counts}, not bin \textit{locations}. As all of the kinematic physics are already baked into the cross section, systematic, and other models, transforming the logical bin indices will do nothing to the likelihood query itself. Rough testing showed that for Q3Q0 samples, this hastened two-detector sampling by about a factor of two.
 
 The macro, \texttt{Squash\-Spectra.C}, performs the following algorithm for every ND member recipe of the cookbook passed as an argument:
 \begin{enumerate}
@@ -266,7 +633,7 @@ The core methods that execute this algorithm live in \texttt{Spec/\-Squash.\-h/c
 
 Any predictions not squashed (i.e. FD predictions) can be soft symlinked or copied to the squashed directory for use in sampling.
 
-The minimum bin content to keep can changed to tune how aggressively to squash predictions. Use \texttt{diagnostic/\-Plot\-Squashed\-Spectra.C} to visualize predictions before and after squashing (see Figure \ref{fig:squashed_spectra_example}).
+The minimum bin content to keep can be changed to tune how aggressively to squash predictions. \texttt{diagnostic/\-Plot\-Squashed\-Spectra\-.C} can be used to visualize predictions before and after squashing (see Figure \ref{fig:squashed_spectra_example}).
 
 \begin{figure}[hbt]
 \begin{minipage}{0.48\linewidth}
@@ -282,10 +649,16 @@ The minimum bin content to keep can changed to tune how aggressively to squash p
 \label{fig:squashed_spectra_example}
 \end{figure}
 
-TODO this macro needs to be extended to also operate on ND NuMI data spectra. We need to extend the bins-to-keep decision algorithm to also look at NuMI data spectra, and the bins-to-keep needs to be identical between the prediction and the NuMI data.
+\todo[inline]{This macro needs to be extended to also operate on ND NuMI data spectra. We need to extend the bins-to-keep decision algorithm to also look at NuMI data spectra, and the bins-to-keep needs to be identical between the prediction and the NuMI data.}
 
 \subsection{Nuances with loading extrapolated samples (TODO cite extrap technote) (TODO make cleaner method for detecting whether a prediction is extrapolated.}
 \label{sec:Nuances_with_loading_extrapolated_samples}
+The following sections are \textbf{not} documentation on the typical 3F pipeline for loading extrapolated predictions. This is a parallel implementation (reproduction) of the extrapolation technique using the "cookbook" framework for the purpose of comparing two-detector inference to a Bayesian extrapolation analysis.
+
+Throughout the tutorial, the proportional decomposition method is assumed everywhere. The methods outlined here could be extended to other decomposition methods without much hassle.
+
+Note from the author (Cullen): I was unable to find a technote that unambiguously describes what the correct configuration (selections, etc) should be used for proportional decomp. I largely reproduced the extrapolation/proportional decomposition method by reading the code used in the 2024 3F analysis, asking people, inferring how it must behave, and generating diagnostic plots. If you have a suggestion for an edit, fix, or citation, please let me know.
+
 An \textbf{extrapolated} prediction is a FD prediction that has corrections from ND MC-data differences applied. These corrections are computed under-the-hood using a specialized extrapolated prediction type.
 Extrapolated predictions must iterate over both FD and ND MC and data, and extrapolated FD recipes must be associated with ND recipes to compute the correct weights.
 The unified prediction factory, \texttt{Make\-Prediction} in \texttt{Spec/\-CAFLoading\-.h/cxx} will try to create an extrapolated prediction using \texttt{Try\-Make\-Extrapolated\-Prediction}.
@@ -303,7 +676,7 @@ The technique for mapping FD recipes to ND recipes for decomposition/extrapolati
 \end{enumerate}
 The methods that implement this algorithm can be found in \texttt{Spec/\-CAFLoading.h/cxx} as \texttt{Get\-Mirror\-ND\-Numu\-Final\-State\-For\-Extrap} and \texttt{Get\-Mirror\-ND\-Nue\-Final\-State\-For\-Extrap}.
 
-Because preparing extrapolated predictions involves postprocessing (more steps than basic merging after iterating over MC), separate cookbooks are used for the loading and analysis steps. Loading systematic variations for extrapolated predictions is the same as with non-extrapolated predictions (use \texttt{LoadReweightablePredictions.C} and \texttt{LoadFileBasedPredictions.C}).
+Because preparing extrapolated predictions involves postprocessing (more steps than basic merging after iterating over MC), separate cookbooks are used for the loading and analysis steps. Loading systematic variations for extrapolated predictions is the same as with non-extrapolated predictions (use \texttt{Load\-Reweightable\-Predictions\-.C} and \texttt{Load\-File\-Based\-Predictions\-.C}).
 
 An example cookbook that will load all \textbf{raw} (not yet postprocessed) spectra from the MC:
 \begin{verbatim}
@@ -337,13 +710,28 @@ Extrapolated predictions will be loaded using real ND data. Fake data studies wi
 \label{sec:additional_post_processing_for_extrapolated_samples}
 Extrapolated predictions can have their grid jobs merged in the same method as non-extrapolated predictions. All methods for merging the extrapolated predictions live in the \texttt{loading} area and have support for parallelization with slurm.
 
-First, extrapolated predictions can be merged into an \texttt{ana::PredictionInterp} with the same technique as non-extrapolated predictions.
+First, extrapolated predictions can be merged into an \texttt{ana::\-Prediction\-Interp} with the same technique as non-extrapolated predictions.
 
-Next, you can diagnose whether your pT-quantile-partitioned recipes look ok by plotting all sub-samples' nominal predictions broken down by channel using \texttt{diagnostic/PlotPredictionComponents.C}. You can plot all systematic variations using \texttt{diagnostic/PlotSystPulls.C}.
-Since loading happens with a cookbook, we can pass the name of the cookbook to these macros verbatim as:
+Next, you can diagnose whether your pT-quantile-partitioned recipes look ok by plotting all sub-samples' nominal predictions broken down by channel using \texttt{diagnostic/\-Plot\-Prediction\-Components\-.C} (see Figure \ref{fig:nominal_extrapolated_prediction_example}). You can plot all systematic variations using \texttt{diagnostic/\-Plot\-Syst\-Pulls\-.C} (See Figure \ref{fig:systematically_shifted_extrapolated_predictions_example}). Since loading happens with a cookbook, we can pass the name of the cookbook to these macros verbatim as:
 \begin{verbatim}
   cafe -bq PlotPredictionComponents.C prod51_fdExtrap_OfficialFD_nomExtrapRaw
 \end{verbatim}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/nominal_predictions_by_component/prod51_fdExtrap_OfficialFD_nomExtrap/asimovA/FD_Numu_fhc_EhadQuant_1_PtQuant_1.png}
+  \caption{Nominal prediction of the FD numu FHC Ehad, pT quant 1, 1 sample extrapolated using real NuMI data partitioned by components.}
+  \label{fig:nominal_extrapolated_prediction_example}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/syst_pulls_plots/prod51_fdExtrap_OfficialFD_nomExtrap/FD_Numu_fhc_EhadQuant_1_PtQuant_1/MaCCRES.png}
+  \caption{\texttt{Ma\-CCRES} shifted spectra of the FD numu FHC Ehad, pT quant 1, 1 sample extrapolated using real NuMI data. Notice the small effect of the systematic shift compared to Figure \ref{fig:systematically_shifted_spectra_example}.}
+  \label{fig:systematically_shifted_extrapolated_predictions_example}
+\end{minipage}
+\end{figure}
 
 Next, recipes partitioned by pT quantile need to be summed up. \textbf{This is not the same operation as using \texttt{hadd\_cafana} on your sub-samples.} \texttt{hadd\_cafana} will average over the samples as if the same source of statistics, but we need to sum the samples as separate sources of statistics.
 \texttt{SumPtQuants.C} performs the summing. This macro expects:
@@ -361,15 +749,56 @@ which symbolically says "take my recipes split by pT quants and transform them i
 
 You can diagnose whether this step succeeded using:
 \begin{verbatim}
-  cafe -bq PlotPredictionComponents.C prod51_fdEhadQuants_OfficialFD_nomExtrapRaw
+  cafe -bq PlotPredictionComponents.C prod51_fdEhadQuants_OfficialFD_nomExtrapRaw asimovA
 \end{verbatim}
+As in \ref{fig:summed_pt_quants_example}, you should verify that each componenet of each output recipe is the sum of its pT quants (if it is composed of pT quants).
+
+Until the "merging the peripheral samples" step, it is strongly encouraged to diagnose the ND configuration of extrapolated predictions using \texttt{diagnostic/Plot\-Extrapolated\-Prediction\-ND\-.C} (see Section \ref{sec:preparing_extrapolated_predictions_using_fake_nd_data}).
+
+\begin{figure}[hbt]
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/nominal_predictions_by_component/prod51_fdExtrap_OfficialFD_nomExtrapRaw/asimovA/FD_NueHighPID_fhc_PtQuant_1.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/nominal_predictions_by_component/prod51_fdExtrap_OfficialFD_nomExtrapRaw/asimovA/FD_NueHighPID_fhc_PtQuant_2.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/nominal_predictions_by_component/prod51_fdExtrap_OfficialFD_nomExtrapRaw/asimovA/FD_NueHighPID_fhc_PtQuant_3.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/nominal_predictions_by_component/prod51_fdEhadQuants_OfficialFD_nomExtrapRaw/asimovA/FD_NueHighPID_fhc.png}
+\end{minipage}
+\caption{FD nue high PID FHC sample extrapolated using real NuMI data. \textbf{Left three plots:} pT quant 1, 2, and 3, respectively. \textbf{Far right:} sum of pT quants computed using \texttt{Plot\-Prediction\-Components\-.C}.}
+\label{fig:summed_pt_quants_example}
+\end{figure}
 
 The final step of postprocessing merges the peripheral recipes into a single bin. This is done using \texttt{Extrapolate\-Predictions\-.C}:
 \begin{verbatim}
   cafe -bq ExtrapolatePredictions.C \
     prod51_fdEhadQuants_OfficialFD_nomExtrapRaw prod51_fdEhadQuants_OfficialFD_nomExtrap
 \end{verbatim}
-Non-peripheral recipes are effectively copied to the new locations dictated by the new disk reader.
+Non-peripheral recipes are effectively copied to the new locations dictated by the new disk reader. In this step, extrapolation/decomposition weights will be baked into the FD predictions themselves, and information about the ND prediction and data will be lost. The outputted predictions will have enough information for inference and will load faster, but this deletion of the ND data means that the Indiana Jones procedure as described in Section \ref{sec:preparing_extrapolated_predictions_using_fake_nd_data} needs to occur before this step. See Figure \ref{fig:extrapolated_peripheral_bin_example} for an example before-and-after for an extrapolated peripheral sample.
+
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/nominal_predictions_by_component/prod51_fdEhadQuants_OfficialFD_nomExtrapRaw/asimovA/FD_NuePeripheral_fhc.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/nominal_predictions_by_component/prod51_fdEhadQuants_OfficialFD_nomExtrap/asimovA/FD_NuePeripheral_fhc.png}
+\end{minipage}
+\caption{FD nue FHC peripheral sample extrapolated using real NuMI data. \textbf{Left:} Before summing into a single bin. \textbf{Right:} After summing into a single bin. Notice that the cosmic prediction was found for the postprocessed recipe as this is a fit input, but no cosmic prediction was found for the not-postprocessed recipe as it is not a fit input. Also notice that each spectrum is divided by the bin width when checking that the integrals match.}
+\label{fig:extrapolated_peripheral_bin_example}
+\end{figure}
 
 The output extrapolated cookbook is now ready to use for a Bayesian inference analysis using real ND data. For a modification to this procedure that uses fake ND data, see Section \ref{sec:preparing_extrapolated_predictions_using_fake_nd_data}.
 
@@ -410,7 +839,7 @@ We now insert the new ND fake data into the FD extrapolated predictions with a m
   \item Merge into FD extrapolated predictions into \texttt{ana::Prediction\-Interp} (can reuse from predictions with real ND data).
   \item \textbf{Insert new ND fake data into FD extrapolated predictions.}
   \item Sum pT quantiles of FD extrapolated predictions (with new ND fake data).
-  \item Collapse peripheral samples into one bin apiece for FD extrapolated predictions (with new ND fake data).
+  \item Collapse peripheral samples into one bin apiece for FD extrapolated predictions (with new ND fake data) and bake in extrapolation/decomposition weights for all samples.
 \end{enumerate}
 
 Starting at the new step, the ND fake data can be inserted into new FD extrapolated predictions using \texttt{Swap\-ND\-Data\-.C} as follows:
@@ -425,7 +854,7 @@ where the arguments are:
 \begin{itemize}
   \item \texttt{prod51\_fdExtrap\_OfficialFD\_nomExtrapRaw} is the input cookbook of FD extrapolated recipes containing the real ND data we will copy from.
   \item \texttt{prod51\_fdExtrap\_OfficialFD\_nomExtrapRawIJFakeRand0} is the output cookbook of FD extrapolated recipes. This determines the output filepaths for recipes.
-  \item \texttt{prod51\_ndForExtrap\_NuEnergyND\_nomFakeRand0} is the input cookbook of ND recipies whose data spectra will be inserted into the new output recipes.
+  \item \texttt{prod51\_ndForExtrap\_NuEnergyND\_nomFakeRand0} is the input cookbook of ND recipies whose data spectra will be inserted into the new output recipes. Notice \texttt{nom\-Fake\-Rand0} is the disk reader which determines the fake data universe for the injected ND fake data. Using \texttt{nom} would inject real NuMI data, and using \texttt{nomFake} would inject fake nominal data without systematic variations.
   \item The boolean argument determines whether to overwrite existing outputs.
   \item \texttt{extrap\_2024} is the name of a systematic policy that will be used for generating ND fake data spectra.
 \end{itemize}
@@ -434,11 +863,105 @@ The macro will, for every input extrapolated FD recipe, find the matching final 
 The new IJ disk reader, \texttt{nom\-Extrap\-Raw\-IJ}, is a light extension of a basic disk reader that enforces patterns about where recipes live to help with organizing prediction objects for many fake data studies.
 The behavior of the disk reader, \texttt{nom\-Extrap\-Raw\-IJ\-Fake\-Rand0}, is to use the new IJ-swapped predictions corresponding to the fake universe with random systematic variations with seed zero, and before returning data spectra, to vary the (FD) MC with the same fake universe.
 
-To diagnose whether the new ND data spectra were inserted correctly, use the macro, \texttt{diagnostic/Plot\-Extrapolated\-Prediction\-ND\-.C}. This macro can be used before using the IJ technique to investigate the real ND NuMI data that the predictions were loaded with and after to demonstrate data spectra were inserted as expected. Now is also a good time to use \texttt{diagnostic/\-Plot\-Prediction\-Components\-.C} on the output prediction to check that the predictions look sane.
+To diagnose whether the new ND data spectra were inserted correctly, use the macro, \texttt{diagnostic/Plot\-Extrapolated\-Prediction\-ND\-.C}. This macro can be used before using the IJ technique to investigate the real ND NuMI data that the predictions were loaded with and after to demonstrate data spectra were inserted as expected. Now is also a good time to use \texttt{diagnostic/\-Plot\-Prediction\-Components\-.C} on the output prediction to check that the predictions look sane. Figure \ref{fig:ij_procedure_fd_nue_fhc_high_pid_pt_quant_1} follows the IJ procedure on an FD nue sample which needs both nue appearance and survival components extrapolated separately. Figure \ref{fig:healthy_ij_example} shows the impact of the successful IJ procedure on the extrapolated FD predictions.
 
-TODO include plots showing good and bad diagnostic output.
+\begin{figure}[hbt]
+\begin{minipage}{0.30\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/syst_pulls_plots/prod51_ndForExtrap_NuEnergyND_nomFakeRand0/ND_Numu_fhc_PtQuant_1/nominal.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.30\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/extrap_nd/prod51_fdExtrap_OfficialFD_nomExtrapRaw/pred_nom/FD_NueHighPID_fhc_PtQuant_1_MEextrap.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.30\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/extrap_nd/prod51_fdExtrap_OfficialFD_nomExtrapRawIJFakeRand0/pred_nom/FD_NueHighPID_fhc_PtQuant_1_MEextrap.png}
+\end{minipage}
+\newline
+\begin{minipage}{0.30\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/syst_pulls_plots/prod51_ndForExtrap_NuEnergyND_nomFakeRand0/ND_NueHighPID_fhc/nominal.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.30\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/extrap_nd/prod51_fdExtrap_OfficialFD_nomExtrapRaw/pred_nom/FD_NueHighPID_fhc_PtQuant_1_EEextrap.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.30\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/extrap_nd/prod51_fdExtrap_OfficialFD_nomExtrapRawIJFakeRand0/pred_nom/FD_NueHighPID_fhc_PtQuant_1_EEextrap.png}
+\end{minipage}
+\caption{IJ procedure on the FD nue FHC high PID pT quant 1 sample. \textbf{Top row:} Procedure on the nue appearance channel. \textbf{Bottom row:} Procedure on the nue survival channel. \textbf{Left column:} ND fake data spectra with random systematic variations. For nue appearance, this is the ND numu FHC pT quant 1 sample. For numu survival, this is the ND nue high PID sample. \textbf{Middle column:} ND MC and real NuMI data inside the FD prediction before performing the IJ procedure. \textbf{Right column:} ND MC and fake data with random systematic variations after performing the IJ procedure.}
+\label{fig:ij_procedure_fd_nue_fhc_high_pid_pt_quant_1}
+\end{figure}
 
-Next, pT quants can be summed using
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/nominal_predictions_by_component/prod51_fdExtrap_OfficialFD_nomExtrapRaw/asimovA/FD_NueHighPID_fhc_PtQuant_1.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/nominal_predictions_by_component/prod51_fdExtrap_OfficialFD_nomExtrapRawIJFakeRand0/asimovA/FD_NueHighPID_fhc_PtQuant_1.png}
+\end{minipage}
+\caption{Effect on FD predictions of the IJ procedure from Figure \ref{fig:ij_procedure_fd_nue_fhc_high_pid_pt_quant_1} on the FD nue FHC high PID pT quant 1 sample. \textbf{Left:} Prediction with real ND NuMI data (before the IJ procedure). \textbf{Right:} Prediction with fake ND data with randoms systematic variations (after the IJ procedure).}
+\label{fig:healthy_ij_example}
+\end{figure}
+
+Figure \ref{fig:unhealthy_ij_example} shows an example of a failed prediction-loading campaign because of an error in preparing the ND selection. A strong mismatch (because of an error in one) between the ND NuMI prediction loaded inside extrapolated predictions and the ND NuMI prediction prepared standalone to be injected into the extrapolated predictions can appear as strangeness in the FD predictions. In Figure \ref{fig:unhealthy_ij_example}, this manifested as negative bin contents, which should be impossible. Opening the ND configuration of the extrapolated predictions, however, reveals that the problem is an issue in the ND NuMI MC prediction. This many NC events is unexpected and must be a bug, although the fake data injected looks sensible. Before performing the IJ technique, however, the FD prediction would have looked sensible because the real ND NuMI data used for decomposition would have had the same selection bug as the ND NuMI MC prediction! The decomposition/extrapolation weights would have been about the correct size but incorrect! This is an example of why checking \texttt{diagnostic/Plot\-Extrapolated\-Prediction\-ND\-.C} on \textbf{all extrapolated predictions} is a valuable diagnostic exercise.
+
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{ij_crazy_fd_numu_fhc_ehad_quant_4_pt_quant_2.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{ij_crazy_nd_numu_fhc_ehad_quant_4_pt_quant_2.png}
+\end{minipage}
+\caption{Example of an \textbf{unhealthy} FD sample (in this case, FHC Ehad, pT quant 4, 2). \textbf{Left:} FD nominal prediction with fake ND data injected. \textbf{Right:} ND nominal prediction used for extrapolating the numu survival channel with fake ND data superimposed.}
+\label{fig:unhealthy_ij_example}
+\end{figure}
+
+One failure mode of the IJ technique is some mismatch between the ND MC inside FD predictions and ND fake data to be injected. This could be an error in matching ND sub-samples, an inconsistency in the selection, etc. This is a frightening failure mode because not only can it cause a loud issue like in Figure \ref{fig:unhealthy_ij_example} but it can silently produce the wrong decomposition/extrapolation weights. In the case of MC and fake data from the same MC dataset (as in this example, nominal), a silver bullet to check for consistency is to perform the IJ technique with the new fake data being the nominal prediction of the ND MC. After performing the IJ procedure this way, every ND sub-sample should have an exact match between the MC and the fake data spectrum. Figure \ref{fig:healthy_ij_example_nom} is an example of this diagnostic test in the successful case.
+
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/extrap_nd/prod51_fdExtrap_OfficialFD_nomExtrapRawIJFake/pred_nom/FD_NueHighPID_fhc_PtQuant_1_EEextrap.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/extrap_nd/prod51_fdExtrap_OfficialFD_nomExtrapRawIJFake/pred_nom/FD_NueHighPID_fhc_PtQuant_1_MEextrap.png}
+\end{minipage}
+\caption{For FD nue FHC high PID pT quant 1, ND MC and fake data without systematic variations. The exact match between MC and fake data indicates a match between ND MC inside FD predictions and the injected ND fake data. \textbf{Left:} ND MC and fake data for nue survival. \textbf{Right:} ND MC and fake data for nue appearance.}
+\label{fig:healthy_ij_example_nom}
+\end{figure}
+
+Another failure mode is caused my a mistake in matching ND and FD quantiles correctly. To test for this, check that ND data spectra look as you expect after being inserted into extrapolated predictions. Figure \ref{fig:healthy_ij_example_correct_data_spectrum} shows the data spectrum plotted standalone before insertion and the ND configuration of an extrapolated prediction after insertion. The spectra are the same, indicating success.
+
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/numi_data_spectra/prod51_ndForExtrap_NuEnergyND_nomFakeRand0_asimovA_two_det_2024/ND_Numu_fhc_EhadQuant_4_PtQuant_2.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_diagnostic_plots/extrap_nd/prod51_fdExtrap_OfficialFD_nomExtrapRawIJFakeRand0/pred_nom/FD_Numu_fhc_EhadQuant_4_PtQuant_2_MMextrap.png}
+\end{minipage}
+\caption{Because the ND data spectra are the same, this is an example of a successful result of the IJ technique. \textbf{Left:} NuMI fake ND data spectrum for FHC numu Ehad, pT quant 4, 2 prepared standalone with random systematic variations to be inserted into an extrapolated prediction. \textbf{Right:} ND configuration of the same FHC numu Ehad quantile after the fake ND data has been inserted.}
+\label{fig:healthy_ij_example_correct_data_spectrum}
+\end{figure}
+
+Like before, pT quants can be summed using
 \begin{verbatim}
   cafe -bq SumPtQuants.C \
     prod51_fdExtrap_OfficialFD_nomExtrapRawIJFakeRand0 \
@@ -468,9 +991,32 @@ For systematics, we take covariance matrix for a good minimum in $\chi^2$ space 
     two_det_2024 \ # Optional - only necessary for systematically-shifted fake data.
     my_analysis_tag # Optional - autogenerated if not specified.
 \end{verbatim}
-Like for other analysis/sampling macros, we will pass a cookbook to specify the configuration of sub-samples. Notice that we have used the cookbook to remove FD recipes for this step. \texttt{two\_\-det\_\-2024} is the name of a systematic policy. The first instance indicates what systematics are free in the minimization. The second instance indicates the systematic policy we use to generate fake data with systematic variations. In general, the second instance is optional, but we need it for our study because we are applying random systematic variations. As this is an in-model study, the systematic policies for minimization and for making fake data are the same. 0 is the offset we use for the random seeding of the minimization which can be changed to run more batches of minimizations. \texttt{my\_\-analysis\_\-tag} indicates a unique tag you can specify to name your analysis. Plotting macros expect tags to find input and generate outputs. If the tag is unspecified, it will be autogenerated from the other arguments.
+Like for other analysis/sampling macros, we will pass a cookbook to specify the configuration of sub-samples. Notice that we have used the cookbook to remove FD recipes for this step. \texttt{two\_\-det\_\-2024} is the name of a systematic policy. The first instance indicates what systematics are free in the minimization. The second instance indicates the systematic policy we use to generate fake data with systematic variations. In general, the second instance is optional, but we need it for our study because we are applying random systematic variations. As this is an in-model study, the systematic policies for minimization and for making fake data are the same. 0 is the offset we use for the random seeding of the minimization which can be changed to run more batches of minimizations. \texttt{my\_\-analysis\_\-tag} indicates a unique tag you can specify to name your analysis. Plotting macros expect tags to find input and generate outputs. If the tag is unspecified, it will be autogenerated from the other arguments. Each minimization is expected to take an hour or less.
 
-After performing many minimizations, we will choose a well-behaved-looking metric with the minimum $\chi^2$ among minimizations. Many are expected to fail, but we only need one to succeed! Use \texttt{Plot\-Covariance\-.C} to plot all covariance matrices and minimization results simultaneously.
+After performing many minimizations, we will choose a well-behaved-looking metric with the minimum $\chi^2$ among minimizations. Many are expected to fail, but we only need one to succeed! Use \texttt{Plot\-Covariance\-.C} to plot all covariance matrices and minimization results simultaneously. Figures \ref{fig:covariance_matrix_estimates} and \ref{fig:covariance_fit_results} are example successful and failed minimizations. Failed minimizations will typically have very high $\chi^2$, an empty or nonsense-looking covariance matrix, and parameter fit results with very large pulls. Notice that the successful minimization's covariance matrix has large covariances in the systematic subspaces that we expect (the QE Z expansion systematics, the PPFX PCA, and the GENIE PCA). Notice also that the successful minimization does not have all fitted parameters tracking the truth values. This can happen either because the systematic is weakly constrained by the data, and the minimum in $\chi^2$ space is driven by the distance-from-nominal penalty term. This can also happen because the minimization has found a local, not global, minimum. The most extreme case from the successful minimization is \texttt{DIS\-vbar\-NC2pi\-\_\-2020} which is also weakly constrained by the data. If no minimizations are acceptable, consider throwing more pseudoexperiments. If this also fails, consider fine-tuning the custom $\chi^2$ penalty term.
+
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_covariance_plots/prod51_ndTopological_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024/covariance_prod51_ndTopological_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_159.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_covariance_plots/prod51_ndTopological_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024/covariance_prod51_ndTopological_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_135.png}
+\end{minipage}
+\caption{Example covariance matrix results of gradient descent to estimate the inverse metric. Axes enumerate systematics. \textbf{Left:} Example of a successful minimization (seed = 159, minimum $\chi^2$ among pseudoexperiments). \textbf{Right:} Example of a failed minimization (seed = 135).}
+\label{fig:covariance_matrix_estimates}
+\end{figure}
+
+\begin{figure}[hbt]
+  \centering
+  \includegraphics[width=\linewidth]{two_det_covariance_plots/prod51_ndTopological_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024/fit_result_prod51_ndTopological_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_159.png}
+  \\
+  \includegraphics[width=\linewidth]{two_det_covariance_plots/prod51_ndTopological_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024/fit_result_prod51_ndTopological_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_135.png}
+  \caption{Example parameter pull minimum fit results of gradient descent. The horizontal axis enumerates systematics, and the vertical axis represents the values of the systematics used to generate fake data (truth) and the values of the systematics found from minimization. \textbf{Top:} Example of a successful minimization (seed = 159). \textbf{Bottom:} Example of a failed minimization (seed = 135).}
+  \label{fig:covariance_fit_results}
+\end{figure}
 
 For oscillation parameters, we perform a single dedicated small Stan warmup job on FD samples without systematic freedom:
 \begin{verbatim}
@@ -481,12 +1027,55 @@ For oscillation parameters, we perform a single dedicated small Stan warmup job 
     asimovA \ # Optional - only necessary for asimov fake data.
     my_analysis_tag # Optional.
 \end{verbatim}
-The cookook indicates the configuration of FD sub-samples. The boolean flag configures whether we warm up in normal (or inverted) ordering. The systematic policy and asimov point are used for making fake data. We expect the asimov point to be an acceptable input to \texttt{ana::\-Reset\-Osc\-Calc\-To\-Asimov\-Point}. The tag is again optional and autogenerated if not specified.
+The cookook indicates the configuration of FD sub-samples. The boolean flag configures whether we warm up in normal (or inverted) ordering. No mass ordering switch is used for warmup because switching the mass ordering confuses the sampler's tuning of the \dmsq{32} component of the metric. The systematic policy and asimov point are used for making fake data. We expect the asimov point to be an acceptable input to \texttt{ana::\-Reset\-Osc\-Calc\-To\-Asimov\-Point}. The tag is again optional and autogenerated if not specified.
 
-We expect this FD sub-warmup job to succeed and run quickly, particularly after the first Stan warmup "window" has completed. To plot the resulting traces and the metric, use \texttt{Plot\-FD\-Sub\-Warmup\-.C}.
+We expect this FD sub-warmup job to succeed and run quickly, particularly after the first Stan warmup "window" has completed. To plot the resulting traces and the metric, use \texttt{Plot\-FD\-Sub\-Warmup\-.C}. Figures \ref{fig:fd_sub_warmup_diagnostic_output} and \ref{fig:fd_sub_warmup_trace_output} show a successful FD sub-warmup. Figure \ref{fig:fd_sub_warmup_diagnostic_output} shows that the sampler is learning to explore the space better (reducing leapfrog steps and learning the metric), and Figure \ref{fig:fd_sub_warmup_trace_output} shows that traces are exploring the typical set of the oscillation subspace. The health of the warmup does not need to be perfect because this step is only used to inform the full warmup. In fact, we don't \textit{expect} this warmup to match the true values very well because the sampler doesn't have full systematic freedom. Notice that the trace for \dmsq{32} does not match the true value, and the sampler is struggling to find the correct octants of \th{13} and \th{23} without the systematic freedom.
 
-\subsection{Performing warmup for two-detector configurations}
-Two-detector warmup is informed by both the systematic covariance estimate and the FD sub-warmup. The seed points for systematic parameters are taken from the best minimization. The seed points for oscillation parameters are taken from the last sample of the FD sub-warmup. The inverse metric is passed as the concatenation of the FD sub-warmup inverse metric and the best covariance matrix. The purpose of the full warmup is to better converge to the typical set, to tune the step size, and to tune the inverse metric of the full typical set of the full parameter set. Rather than perform warmup before main MCMC sampling, we instead prepare a single warmup chain and use it for all MCMC jobs. Use:
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_covariance_plots/prod51_fdEhadQuants_OfficialFD_nomFakeRand0_NO_two_det_2024_asimovA/metric.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_covariance_plots/prod51_fdEhadQuants_OfficialFD_nomFakeRand0_NO_two_det_2024_asimovA/traces_warmup/n_leapfrog__.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_covariance_plots/prod51_fdEhadQuants_OfficialFD_nomFakeRand0_NO_two_det_2024_asimovA/traces_warmup/treedepth__.png}
+\end{minipage}
+\caption{Example diagnostic output of a successful FD sub-warmup job. This required 12 minutes on one CPU core to complete. \textbf{Left:} Oscillation subspace of the inverse metric. \textbf{Middle:} Number of leapfrog steps taken for every sample. \textbf{Right:} Numerical integration binary tree depth for every sample. A successful Stan warmup will reduce the number of leapfrog steps and maximum tree depth necessary to perform the sampling as it progresses.}
+\label{fig:fd_sub_warmup_diagnostic_output}
+\end{figure}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_covariance_plots/prod51_fdEhadQuants_OfficialFD_nomFakeRand0_NO_two_det_2024_asimovA/traces_warmup/delta(pi)_BoundedStepPriordCP.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_covariance_plots/prod51_fdEhadQuants_OfficialFD_nomFakeRand0_NO_two_det_2024_asimovA/traces_warmup/dmsq32tightscaled_FlatDmSq32.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_covariance_plots/prod51_fdEhadQuants_OfficialFD_nomFakeRand0_NO_two_det_2024_asimovA/traces_warmup/th13_FlatTh13.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_covariance_plots/prod51_fdEhadQuants_OfficialFD_nomFakeRand0_NO_two_det_2024_asimovA/traces_warmup/th23_FlatTh23.png}
+\end{minipage}
+\caption{Trace outputs of a successful FD sub-warmup job. The green line is the true value (for this study, the NOvA 2020 BF point). \textbf{Left to right:} \dcp, \dmsq{32}, \th{13}, \th{23}}
+\label{fig:fd_sub_warmup_trace_output}
+\end{figure}
+
+\subsection{Performing full warmup for two-detector configurations}
+Two-detector warmup is informed by both the systematic covariance estimate and the FD sub-warmup. The seed points for systematic parameters are taken from the best minimization. The seed points for oscillation parameters are taken from the last sample of the FD sub-warmup. The inverse metric is passed as the concatenation of the FD sub-warmup inverse metric and the best covariance matrix. The purpose of the full warmup is to better converge to the typical set, to tune the step size, and to tune the inverse metric of the \textit{full} typical set of the full parameter set. Rather than perform warmup before main MCMC sampling, we instead prepare a single warmup chain and use it for all MCMC jobs. Use:
 \begin{verbatim}
   cluster_estimate_covariance \
     prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0 \
@@ -499,13 +1088,63 @@ fd_sub_warmup_prod51_fdEhadQuants_OfficialFD_nomFakeRand0_NO_two_det_2024_asimov
     asimovA \ # Optional - only necessary for asimov fake data.
     my_analysis_tag # Optional.
 \end{verbatim}
-The parameters are the cookbook, then the systematic policy for sampling, then a filepath to covariance matrix outputs, a filepath to a ROOT file containing FD sub-warmup output, then the systematic policy and asimov point for generating fake data, then the analysis tag override. Use \texttt{Plot\-Warmup\-.C} to plot the diagnostic and parameter traces and the inverse metric for the warmup job once complete.
+The parameters are the cookbook, then the systematic policy for sampling, then a filepath to covariance matrix outputs, a filepath to a ROOT file containing FD sub-warmup output, then the systematic policy and asimov point for generating fake data, then the analysis tag override.
 
-The full warmup of a two-detector job is expected to take a long time (about a day on a CPU) and will fail for a poor estimate of the systematic covariance. Unfortunately, it is not parallelizable. See Section \ref{sec:diagnosing_poorly_performing_mcmc_warmup} for discussion of Stan warmup failure modes and how to address them.
-
-Warmup-making macros will output using \texttt{Stan\-Fitter::\-Verbosity::\-kVery\-Verbose} mode which will output to \texttt{std::\-cout} the diagnostic and parameter state of every MCMC sample as they are created. This is highly useful to predict whether the sampler will succeed or fail at warmup early in the job or after the first window passes in phase II of warmup.
+The full warmup of a two-detector job is expected to take a long time (about a day on a CPU) and will fail for a poor estimate of the systematic covariance. Unfortunately, it is not parallelizable. See Section \ref{sec:diagnosing_poorly_performing_mcmc_warmup} for discussion of Stan warmup failure modes and how to address them. Warmup-making macros will output using \texttt{Stan\-Fitter::\-Verbosity::\-kVery\-Verbose} mode which will output to \texttt{std::\-cout} the diagnostic and parameter state of every MCMC sample as they are created. This is highly useful to predict whether the sampler will succeed or fail at warmup early in the job or after the first window passes in phase II of warmup. It is suggested to spy on the \texttt{std::\-cout} in real time (suggest \texttt{tail -f}) to stop warmup sampling early if there is a problem.
 
 As an alternative to generating warmup from scratch, if you have a successful warmup job already finished that is similar enough to your target warmup, use \texttt{Make\-Warmup\-From\-Seed\-.C} to accept that similar warmup as an input to update the typical set estimate and the metric and step size.
+
+\begin{figure}[hbt]
+\begin{minipage}{0.58\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/metric.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.30\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/traces_warmup/n_leapfrog__.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/traces_warmup/treedepth__.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/traces_warmup/stepsize__.png}
+\end{minipage}
+\caption{Diagnostic output from a successful full two-detector warmup run. This required 2.5 hours on one CPU core to complete (not counting covariance estimation and FD sub-warmup). \textbf{Left:} Inverse metric solution after warmup. \textbf{Top right:} Number of numerical integration leapfrog steps for every sample. \textbf{Middle right:} Numerical integration binary tree depth for every sample. \textbf{Bottom right:} Numerical integration step size for every sample.}
+\label{fig:full_warmup_diagnostic_output}
+\end{figure}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/traces_warmup/delta(pi)_BoundedStepPriordCP.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/traces_warmup/dmsq32tightscaled_FlatDmSq32.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/traces_warmup/th13_FlatTh13.png}
+\end{minipage}
+\\
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/traces_warmup/th23_FlatTh23.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/traces_warmup/MaCCRES.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/traces_warmup/2ndclasscurr.png}
+\end{minipage}
+\caption{Traces from the successful two-detector warmup run in Figure \ref{fig:full_warmup_diagnostic_output}. \textbf{Top row left to right:} \dcp, \dmsq{32}, \th{13}. \textbf{Bottom row left to right:} \th{23}, \texttt{Ma\-CC\-RES}, \texttt{2nd\-class\-curr}.}
+\label{fig:full_warmup_trace_output}
+\end{figure}
+
+Use \texttt{Plot\-Warmup\-.C} to plot the diagnostic and parameter traces and the inverse metric for the warmup job once complete. Figure \ref{fig:full_warmup_diagnostic_output} shows the result of a successful two-detector full warmup job. Notice that the metric now contains both the oscillation and systematic subspace, and the sampler has learned correlations between the subspaces. Notice also that the sampler has learned additional correlations that the gradient descent estimation was unable to find. The leapfrog and step size traces are also healthy for this run - the sampler is able to increase the step size as it improves its adaptation and reduce the number of leapfrog steps. \textbf{Use of a dense metric is essential to achieve such a small number of leapfrog steps per sample.} The traces in Figure \ref{fig:full_warmup_trace_output} also reveal a valuable early look into the shape of the parameter space before main sampling. Each of the oscillation traces indicate good exploration of the oscillation subset of the typical set - parameter ranges are expected, and multimodal parameters are exploring all accessible modes frequently. \textbf{It is worthwhile to check that full warmup has not missed any expected modes in oscillation space, particularly for \dcp}. Figure \ref{fig:full_warmup_trace_output} also shows two representative systematic traces. It is valuable for a fake data study to check that well-constrained systematics like \texttt{Ma\-CC\-RES} track well with their true values and that weakly constrained systematics like \texttt{2nd\-class\-curr} are being driven by their priors. If many systematic traces are not overdense near the true values in a fake data study, consider pausing and further diagnosing the method.
 
 \subsection{Performing warmup for extrapolated configurations}
 Preparing warmup for extrapolated cookbooks is simpler than for two-detector because the systematic subspace has a simpler likelihood surface with extrapolated systematics (most systematics become more Gaussian-like after extrapolation) and because the likelihood query is much faster (no need to query tens of thousands of ND bins for every leapfrog step). To prepare warmup for extrapolated cookbooks,
@@ -518,7 +1157,36 @@ Preparing warmup for extrapolated cookbooks is simpler than for two-detector bec
     my_analysis_tag # Optional.
 \end{verbatim}
 
-As all of the warmup macros output in the same fashion, use \texttt{Plot\-Warmup\-.C} in the same fashion as with two-detector warmup.
+As all of the warmup macros output in the same fashion, use \texttt{Plot\-Warmup\-.C} in the same fashion as with two-detector warmup. Figure \ref{fig:extrapolated_warmup_output} highlights some differences between warming up with an extrapolation analysis as opposed to a two-detector analysis:
+\begin{itemize}
+  \item Since we start warmup from scratch, the number of leapfrog steps required is initially large because the sampler is not yet tuned. Consequentially, the start of sampling is slow (until the first window update, sample index \texttt{Stan\-Config::\-init\_\-buffer + Stan\-Config::\-window}.
+  \item With extrapolation, systematics tend to be driven by the prior. Even systematics like \texttt{Ma\-CC\-RES} that are well-constrained in two-detector inference have more diffuse traces in an extrapolation analysis. This simpler, more-Gaussian-shaped systematic geometry one reason why sampling in extrapolation inference is so much easier than with two-detector.
+  \item However, evaluating the health of sampling in the oscillation subspace is the same between two-detector and extrapolation. It is valuable to check that traces cover all expected modes of oscillation parameters.
+\end{itemize}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovA/traces_warmup/n_leapfrog__.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovA/traces_warmup/treedepth__.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovA/traces_warmup/MaCCRES.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovA/traces_warmup/delta(pi)_BoundedStepPriordCP.png}
+\end{minipage}
+\caption{Traces from a successful extrapolated warmup run. This required 6.8 hours on one CPU core to complete. Most of this time is spent at the start of sampling when tree depth is maxing out at 10. \textbf{Left to right:} Trace for number of leapfrog steps, binary tree depth, \dcp, \texttt{Ma\-CC\-RES}.}
+\label{fig:extrapolated_warmup_output}
+\end{figure}
 
 \subsection{Parallelized MCMC sampling}
 This step is the computationally heavyweight step of the analysis past prediction loading. There are two schemes of parallelization that are available for main MCMC sampling:
@@ -550,7 +1218,7 @@ You can perform high-statistics MCMC sampling with:
 \end{verbatim}
 where the parameters follow the same patterns as for making MCMC warmup.
 
-TODO it would be convenient to pass the number of samples as a parameter to \texttt{Make\-Samples\-.C}.
+\todo[inline]{It would be convenient to pass the number of samples as a parameter to \texttt{Make\-Samples\-.C}.}
 
 Each chain will have a \texttt{Sampling\-Ctx\-.C} structure attached inside its ROOT file indicating how the chain was prepared with whatever information is available. This includes any fake data unvierse used to prepare the chain which is useful for plotting.
 
@@ -578,16 +1246,41 @@ This macro will try to preserve other metadata in the ROOT files other than the 
 \subsection{Posterior analysis}
 The posterior is a high-dimensional object, making it difficult to visualize. The most straightforward tactic for visualizing the posterior is to marginalize it, meaning to represent distributions of the posterior in one or two dimensions while integrating over all other parameters. For MCMC, this is performed by binning samples into a histogram as you would any MC dataset.
 
-The Bayesian two-detector analysis uses the \texttt{Bayesian\-Marginal} suite of tools to efficiently marginalize over high statistics MCMC chains. Axes used for marginalization of oscillation parameters are fixed (a function of an asimov point for a fake data study). Axes for marginalization of systematic parameters are computed on-the-fly because the shape of the non-extrapolated systematic subspace is not intricately known before marginalization.
+The Bayesian two-detector analysis uses the \texttt{ana::\-Bayesian\-Marginal} suite of tools to efficiently marginalize over high statistics MCMC chains. Axes used for marginalization of oscillation parameters are fixed (a function of an asimov point for a fake data study). Axes for marginalization of systematic parameters are computed on-the-fly because the shape of the non-extrapolated systematic subspace is not intricately known before marginalization.
 
 For large concatenated chains (more than about 3 GB), it is advised to keep chains on disk rather than reading them into memory all at once (the \texttt{ana::\-MCMC\-Samples} default). Macros will keep MCMC samples on disk to cover the case of large chains. This is done because ROOT will silently drop \texttt{TTree} baskets from large chains, making posteriors look ridiculous. Keeping trees on disk is, in theory, slower for iteration but gurantees the correct answer from the ROOT side.
 
-\texttt{ana::\-Plot\-Samples\-.C} is the primary macro used for visualizing marginal distributions of the posterior for a single analysis tag. The macro will output all 1D marginals of oscillation and systematic parameters, canonical 2D marginals of oscillation parameters, 2D marginals of $\Delta m^2_{32}$ with all systematics, and the big systematic pulls plot.
+\texttt{ana::\-Plot\-Samples\-.C} is the primary macro used for visualizing marginal distributions of the posterior for a single analysis tag. The macro will output all 1D marginals of oscillation and systematic parameters, canonical 2D marginals of oscillation parameters, 2D marginals of \dmsq{32} with all systematics, and the big systematic pulls plot.
 The macro implements \texttt{ana::\-Sample\-Transform}s to compute marginals in $\delta_{\mathrm{CP}}$, $\sin^2(2\theta_{13})$, and $\sin^2\theta_{23}$. Marginal plotting macros will try to draw lines on top of marginals to indicate true pulls in a fake data study. These are automatically specified in the \texttt{Sampling\-Ctx\-.C} metadata structure that gets attached to sampling jobs.
+
+\begin{figure}[hbt]
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/1DMarginals/both_orderings/MaCCRES.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/2DMarginals/normal_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32_both.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovA_two_det_extrap/1DMarginals/normal_ordering/dmsq32tightscaled_FlatDmSq32.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovA_two_det_extrap/2DMarginals/inverted_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32.png}
+\end{minipage}
+\label{fig:example_posterior_analysis}
+\caption{Example marginals of posteriors for two-detector and extrapolation. \textbf{Left to right:} Two-detector 1D marginal of \texttt{Ma\-CC\-RES} marginalized over both mass orderings. Two-detector 2D marginal (heatmap) and $1\sigma$ and $2\sigma$ credible contours for samples in normal ordering. Superimposed 1D marginals of \dmsq{32} from two-detector and extrapolation for samples in normal ordering. Superimposed 2D credible contours from two-detector and extrapolation for samples in inverted ordering.}
+\end{figure}
 
 To superimpose marginals in a comparison-plot style, use \texttt{ana::\-Plot\-Samples\-Superimposed\-.C} which accepts an arbitrarily large number of analysis tags to superimpose.
 
 \section{Diagnosing poorly-performing HMC (warmup) - A Stan survival guide (TODO)}
 \label{sec:diagnosing_poorly_performing_mcmc_warmup}
+\section{Wishlist for the future}
 
 \end{document}
