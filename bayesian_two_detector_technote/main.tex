@@ -1,13 +1,17 @@
 \documentclass{article}
 \usepackage{amsmath}
+\usepackage[style=phys,maxbibnames=2]{biblatex}
 \usepackage{fancyvrb}
 \usepackage[left=0.75in,right=0.75in,top=1.25in,bottom=1.25in]{geometry}
 \usepackage{graphicx}
 \usepackage{hyperref}
 \usepackage{lineno}
+\usepackage{placeins}
 \usepackage{relsize}
 \usepackage{todonotes}
 \usepackage{xcolor}
+
+\addbibresource{references.bib}
 
 \title{Technote: Bayesian two-detector inference}
 \author{Cullen Sullivan}
@@ -25,48 +29,12 @@
 
 \section{Introduction (TODO)}
 
+\FloatBarrier
 \tableofcontents
 
-\section{Motivation (TODO)}
-
-\section{Language quick reference}
-\textbf{Bayesian inference:}
-\begin{itemize}
-  \item The \textbf{Model} is (TODO)
-  \item The \textbf{Data} or \textbf{Observation} is (TODO)
-  \item A \textbf{Posterior} is (TODO)
-  \item A \textbf{Likelihood} is (TODO)
-  \item A \textbf{Prior} is (TODO)
-  \item \textbf{Bayes' Rule} connects (TODO)
-  \item \textbf{Stan} is (TODO)
-  \item \textbf{HMC} is (TODO)
-  \item The \textbf{no U-turn sampler} (NUTS) sampler algorithm is (TODO)
-  \item The \textbf{typical set} (TODO)
-  \item The \textbf{metric} is (TODO)
-  \item The \textbf{Step size} is (TODO)
-  \item A \textbf{leapfrog step} is (TODO)
-  \item HMC \textbf{Warmup} is (TODO)
-  \item HMC main \textbf{Sampling} is (TODO)
-  \item \textbf{Autocorrelation} is (TODO)
-\end{itemize}
-
-\textbf{Two-detector-specific jargon}
-Some intentional choices are made regarding names of key structures in the two-detector framework. Unfortunately, "sample" is an overloaded keyword (MCMC sample and counting experiment sub-sample). One solution to disambiguate the ideas is to chose a completely different name for sub-samples and explicitly denote MCMC samples as MCMC. We have chosen the following (intentionally cute) convention:
-\begin{itemize}
-  \item A \textbf{Recipe} is a counting experiment sub-sample. In the implementation, a Recipe is fully specified, i.e. it knows what dataset(s) it's loaded from, its selection, its kinematic axes, and how its fake data universe should be prepared during a fake data study.
-  \item A \textbf{Cookbook} is a set of Recipes. The Cookbook is a key analysis structure and is commonly passed around as a parameter. A cookbook is designed to indicate a complete description of how a set of counting experiment sub-samples should be prepared for performing inference.
-\end{itemize}
-
-\textbf{Miscellaneous jargon}
-\begin{itemize}
-  \item An \textbf{Indiana Jobes} (IJ) prediction is one that has undergone the IJ technique to swap ND data spectra inside extrapolated predictions. For a fake data study, re-loading FD extrapolated predictions from scratch just to change the ND NuMI data spectrum is effective albeit inefficient and cumbersome. The IJ method takes new data spectra to inject, goes inside ROOT files with FD predictions, and replaces the data spectra. See Section \ref{sec:preparing_extrapolated_predictions_using_fake_nd_data} for details about the method.
-\end{itemize}
-
-\section{Procedures and techniques (TODO)}
-
-\subsection{Subsample configurations (TODO)}
-\todo[inline]{The section on Maria's topological samples needs more detail and plots. At minimum, nominal predictions in 2D Q3Q0/ThetaLepE space. Needs detail about kinematic axes and the systematics that samples are designed to constrain. Bonus points if we include the plots that break down the topological samples by interaction mode.}
-All studies in this technote use CV-tuned prod5.1 nominal ND and FD MC. We use the following SAM definitions (pointing to concats) for ND nominal predictions and reweightable systematics:
+\section{Procedures and techniques}
+\subsection{Subsample configurations}
+All studies in this technote use CV-tuned prod5.1 nominal ND and FD MC. We use the 2024 3F analysis NuMI exposure and livetime. We use the following SAM definitions (pointing to concats) for ND nominal predictions and reweightable systematics:
 {\smaller\begin{verbatim}
 prod_sumdecaf_R20-11-25-prod5.1reco.a_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_v1_numu2020
 prod_sumdecaf_development_nd_genie_N1810j0211a_nonswap_fhc_nova_v08_full_v1_nue2020prod5.1
@@ -277,7 +245,7 @@ The configuration of a two-detector inference analysis is as follows:
   \item As a two-detector inference analysis is flexible, the ND sub-samples can be configured in any way that reasonably constrains the systematic parameters.
 \end{itemize}
 
-Throughout this technote, two-detector ND sub-samples are configured as (nearly) Maria's \textbf{topological samples} \cite{ref:maria_thesis}. Sub-samples are selected using cuts in prongCVN space and are defined as:
+Throughout this technote, two-detector ND sub-samples are configured (nearly) as M. Martinez-Casales's topological samples \cite{ref:maria_thesis}. Sub-samples are selected using cuts in prongCVN space and are defined as:
 \begin{itemize}
   \item $\mu^-$ (FHC): Strictly one fuzzyk prong, and it has a prongCVN muon score $> 0.5$.
   \item $\mu^- + p$ (FHC): Strictly two fuzzyk prongs. One has a prongCVN muon score $> 0.5$ and one has a proton score $> 0.5$.
@@ -292,7 +260,9 @@ Throughout this technote, two-detector ND sub-samples are configured as (nearly)
   \item Numu everything else (RHC): Any RHC event that passes the numu event selection but passes none of the numu RHC topological cuts.
   \item $e^+ + X$ (RHC): Any RHC event that passes the ND nue event selection.
 \end{itemize}
-where the ND numu event selection is \texttt{ana::\-kNumu\-2024\-ND}, and the ND nue event selection is \texttt{ana::\-kNue\-2024\-ND} (the same as the 2024 3F analysis).
+where the ND numu event selection is \texttt{ana::\-kNumu\-2024\-ND}, and the ND nue event selection is \texttt{ana::\-kNue\-2024\-ND} (the same as the 2024 3F analysis). ND numu topological samples are expressed in Q3Q0 space (as in, reconstructed $|\vec{q}|$ and $q_0$, parametrizing the momentum transfer four-vector, $q$ - $|\vec{q}|$ is reconstructed using four-momentum conservation and Ehadvis, $q_0$ is reconstructed as Ehadvis verbatim), and the ND nue topological samples are expressed in electron angle (with NuMI) and electron (reconstructed) energy space. No transformation into truth space is performed.
+
+A two-detector inference configuration using the same ND configuration as extrapolation (Ehad quantiles) is possible, if not easier than using topological samples. Past studies \cite{ref:two_det_nd_ehad_quants} have investigated how well the sampler performs as a function of the configuration of the ND for in-model fake data studies. The result of these studies was that the topological samples perform better at constraining cross section and detector systematics (strong shape effect in Q3Q0 space) but samples with an explicit handle on muon energy are better at constraining beam flux systematics (mostly normalization but stronger shape effect in Emu space). Somehow, these effects conspired to make all results get the same answer in oscillation space. For prod6, we encourage revisiting the configuration of the ND, with information from out-of-model fake data studies, to best constrain the NOvA ND data.
 
 Systematic variations are loaded from MC as separate sub-predictions and merged into an \texttt{ana::\-Prediction\-Interp} in post-processing.
 
@@ -301,6 +271,7 @@ Extrapolated FD samples are prepared in this analysis very similarly to those us
 For extrapolated predictions, proportional decomposition is used for simplicity. We load and extrapolate numu and nue samples in pT quants then sum them together in postprocessing. Final post-processed extrapolated predictions have the same kinematic axes, selections, weights, statistics, exposures, and livetimes as non-extrapolated predictions used for two-detector analyses. By default, extrapolated predictions are loaded with real ND NuMI data which can be swapped out in a fake data study.
 
 \subsection{Systematic freedom of the analysis}
+\label{sec:systematic_freedom_of_the_analysis}
 Table \ref{tab:systematic_freedom} indicates which systematic parameters are used in two-detector and extrapolation analyses. All systematics tabulated are used in both analyses except for an exception with detector calibration.
 
 In typical extrapolation analyses, detector calibration uncertainties are treated as correlated (\texttt{Calibration} or also known as "absolute calibration") and anticorrelated (\texttt{Relative\-Calib}) components. This way, weights can be extrapolated from the ND to the FD in a way that could not be done with uncorrelated uncertainties. However for two-detector, treating calibration (in general, \textit{any}) parameters as correlated and anticorrelated can break the NUTS HMC algorithm. Figure \ref{fig:calibration_chi2_traces}, $\chi^2$ traces quantifying the impact of uncorrelated calibration systematics while others are held at 0, show why this is an issue. Because the ND has much higher statistics than the FD, the $chi^2$ (and therefore likelihood) gradient is much steeper for \texttt{Calibration\_\-ND} than for \texttt{Calibration\_\-FD}. The shape of the likelihood surface is largely driven by \texttt{Calibration\_\-ND}. When these are transformed to (anti)correlated space, this creates a nearly perfect degeneracy between \texttt{Calibration} and \texttt{Relative\-Calib} because the FD samples do not pull strong enough to break the degeneracy in ND samples. In likelihood space, this manifests as a continuous valley in the 2D calibration (anti)correlated subspace. The problem situation is where the sampling pseudoparticle is given a random momentum largely along the valley where it will continue for a large distance without turning around. Not only does HMC warmup not handle valleys well (no metric solution can help the sampler explore their geometry), the large distance the particle needs to traverse usually results in a divergence and unhealthy sampling. \textbf{To avoid the issue entirely, we perform two-detector inference in uncorrelated space and extrapolation analysis in (anti)correlated space.}
@@ -372,8 +343,19 @@ DIS ($\bar{\nu}$ $\pi$ production) & FSI                                &       
 \label{tab:systematic_freedom}
 \end{table}
 
+\todo[inline]{Note: Some systematics that are used in the official 3F analysis are not present in this list. We don't use rock scale, cosmic scale, PPFX PC 4, Michel tagging, overall normalization, or the G4 PCA systematics. We have additional RES, DIS, and FSI systematics. For prod6 studies, some of these definitely need to be included (for example, cosmic scale wasn't included for this study only for simplicity - it wouldn't change any conclusions here.) Some systematics weren't included for technical reasons (for example, the G4 PCA implementation is wild and assumes 3F extrapolation). Some systematics were just omitted by mistake (for example, PPFX PC 4). As a general note, we as a collaboration need to sit down for prod6 and think carefully about every systematic for two-detector inference.}
+
+\todo[inline]{Note: Some systematics were not used in extrapolation by mistake. These include UnCorrNDMuEScaleSyst2024, PileupMuESyst2024, ProngAngleSystNDXZ2021, ProngAngleSystNDYZ2021, and NuTauScale. Also, the handling of light level is slightly different - in our extrapolation analysis, we just loaded ND and FD light level as separate systematics and sampled them uncorrelated. This should be fixed for future studies (for prod6).}
+
 \subsection{Preparing fake data}
-In this technote, "in-model" fake data refers to fake data that can be generated by turning systematic knobs and by choosing some oscillation parameters. Only standard 3F neutrino oscillations are considered, but in general, the two-detector method could be extended to other BSM searches. Because the purpose of this technote is to evaluate the sensitivity of the two-detector technique in the best case (perfectly predictive ND model), only in-model studies are performed.
+In this technote, "in-model" fake data refers to fake data that can be generated by turning systematic knobs and by choosing some oscillation parameters. Only standard 3F neutrino oscillations are considered, but in general, the two-detector method could be extended to other BSM searches. Because the purpose of this technote is to evaluate the sensitivity of the two-detector technique in the best case (perfectly predictive ND model), only in-model studies are performed. "Random systematic variations" means using a random number generator to choose in-domain systematic pulls with the following algorithm given some random seed:
+\begin{enumerate}
+  \item If the systematic is (anti)correlated between the ND and FD, use the procedure defined in Section \ref{sec:systematic_freedom_of_the_analysis},
+  \item Otherwise, compute the hash of the parameter's short name using \texttt{std::\-hash}.
+  \item Create a pseudorandom number generator as ROOT \texttt{TRandom3} with seed as the user seed plus the hash.
+  \item Draw once with \texttt{TRandom3::\-Uniform} with boundaries as the systematic domain minimum and maximum.
+\end{enumerate}
+This way, the choice of random variations is deterministic and insensitive to a change in the list of systematics in an analysis. That is, adding or removing a systematic does not affect any of the random variations for the other systematics.
 
 For two-detector ND sub-samples, fake data spectra are generated on-the-fly inside analysis macros using the NuMI prediction. For the FD, fake data are generated on-the-fly inside analysis macros using the NuMI prediction and the cosmic background prediction. Currently, no rock event prediction is performed. Fake data at "nominal" means using the prediction of an \texttt{ana::\-Prediction\-Interp} with all systematic knobs at 0, not the nominal prediction. This technique has the convenient property that the nominal prediction has $\chi^2 = 0$ exactly with all knobs at zero which is not true for using the nominal prediction inside the \texttt{ana::\-Prediction\-Interp} because of interpolation inefficiency.
 
@@ -418,6 +400,8 @@ See Figure \ref{fig:syst_prior_cases} for examples of each case of systematic pr
 \end{figure}
 
 \subsection{HMC warmup}
+In HMC inference, no reactor constraint is used, and $\th{13}$ is a free fit parameter.
+
 Now that loading the predictions and (fake) data is complete, we've finished preparing the model. We're now ready to perform inference with Stan HMC. Before taking MCMC samples that we'll use for inference, we must first warm up the sampler. In warmup, the sampler adapts itself to the geometry of the parameter space by tuning a step size (used for numerical integration of simulated trajectories), a metric (like a topological metric that warps space for exploring a simpler geometry), and the position state of the sampler to the typical set. Stan HMC chooses a unit diagonal metric as an initial ansatz and iteratively tune it through warmup. Stan HMC warmup has three phases:
 \begin{enumerate}
   \item \textbf{Initial buffer:} Allowing the step size to be adapted but keeping the metric at its seed, allow the pseudoparticle to converge to the typical set. This is similar to a clever gradient descent to allow the sampler to fall into minima of the likelihood surface. This is spiritually similar to burnin in $\mathrm{MR^2T^2}$ MCMC sampling.
@@ -450,9 +434,40 @@ Every chain's state is seeded from the same HMC warmup. With successful HMC warm
 
 Both mass orderings are sampled by, for every sample, using the Metropolis acceptance ratio to randomly jump between orderings.
 
-\subsection{Convergence checks (TODO)}
+\subsection{Convergence checks}
+Stan HMC is very good at always sampling proportional to the posterior (that is, it always preserves detailed balance). Stan HMC will always output a representation of the posterior \textbf{for a single, infinitely long chain}. In practice, we perform parallel sampling over many chains of finite length, so our chains are not guranteed to be a good representation of the posterior. There is no closed-form test to check that MCMC chains have converged to the correct posterior, so the state of the art in the field of computational Bayesian statistics is to demonstrate that known MCMC failure modes have not occurred. This is important and not just pedantic for the case of inference in the oscillation subspace because multimodal posteriors are highly susceptible to bias in MCMC sampling causing convergence to the wrong posterior.
+
+In addition to the computational complexity introduced by the two-detector technique, there is additional challenge in demonstrating MCMC convergence for two-detector compared to extrapolation because the shape of the systematic subspace is not known prior to sampling. The extrapolated systematic parameter space is driven by the prior, weakly constrained by (FD) data, and therefore diffuse such that its space is not multimodal and well-known. Effectively, the systematic susbpace is simple enough that no convergence checks are necessary, so historically, NOvA Bayesian analyses have focused on convergence of the oscillation subspace. Two-detector sampling has additional challenges:
+\begin{itemize}
+  \item A multimodal systematic subspace.
+  \item The shape of the subspace is unknown \textit{even for fake ND data}. Although we know the correct answer in a fake data study for the global minimum in systematic space, we have no notion of what other minima are.
+  \item The shape of the subspace is unknown \textit{for real ND data}. Sampling with real ND data is out of the scope of this technical note. These challenges will be enumerated and managed in future analyses.
+  \item Nontrivial correlations between systematic and oscillation parameters (particularly \dmsq{32}) mean that poor convergence in the systematic subspace can cause the sampler to get the wrong posterior in the oscillation subspace.
+\end{itemize}
+
+To illustrate how multimodal subspaces are challenging for parallel MCMC sampling, consider a posterior with two modes separated by a region with low likelihood such that the sampler is discouraged from switching between modes. In the extreme case of chains never switching modes, the MCMC will always report preference for modes in the same ratio as the ratio of chains being seeded in either mode regardless of what the true posterior favors.
+
+We use an external package \cite{ref:mcmc_diagnostics} to perform some MCMC health checks:
+\begin{itemize}
+  \item Intra-chain and inter-chain $\widehat{R}$ (see note below).
+  \item Analysis of trace heatmaps (for every parameter, a 2D heatmap of sample index and parameter value over all MCMC chains). This is used to choose an appropriate burnin and to check visually for good mixing of chains.
+  \item Analysis of autocorrelations which tests for the sampler staying too long in modes given the chain length. If the autocorrelation length is not much shorter than the chain length, this indicates poor exploration of the posterior. However, this will not indicate a problem if there exist modes that are not explored.
+\end{itemize}
+
+Applied Bayesian statisticians recommend using $\widehat{R}$, a metric of intra-chain and between-chain mixing, to assess how well MCMC chains have converged together \cite{ref:stan_rhat}. $\widehat{R}$ is like an alarm bell that rings for poor mixing of chains, however, the metric tends to send false positive alarms for highly multimodal posteriors \cite{ref:nested_rhat} (like for the oscillation subspace), so both extrapolation and two-detector analyses tend to fail typical $\widehat{R}$ checks. More sophisticated statistics of convergence exist but are either nontrivial to implement or make assumptions about the shape of the posterior or prior that are not true for the neutrino oscillation case \cite{ref:rank_normalization}.
+
+Rather than try to fix the problems $\widehat{R}$ and other statistics carry with multimodal posteriors, we instead determine how well MCMC chains have converged to some posterior (not necessarily the correct posterior) with a "split posterior" technique. Subsets of MCMC samples, chosen uniformly, should all give the same answer for the posterior within the MC statistics:
+\begin{itemize}
+  \item The entire Markov chain,
+  \item Individual batches of Markov chains chosen at random,
+  \item A subset of MCMC samples chosen at random uniformly from all chains,
+  \item Internal fractions of chains (like from sample index $a$ to $b$ across all chains), and
+  \item Any thinning of chains (that is, keep every $n$'th sample for any $n$).
+\end{itemize}
+If any of these methods of preparing a subset of the posterior return a different result that cannot be explained by a fluctuation in the MC statistics, then there is an issue with the MCMC convergence. This is a convenient and visual way to check that the MCMC has converged to \textit{some} posterior but does not demonstrate that it has converged to the \textit{correct} posterior. To demonstrate the latter, we use posterior predictive analysis in Section \ref{sec:posterior_analysis}.
 
 \subsection{Posterior analysis}
+\label{sec:posterior_analysis}
 Because all chains were seeded at the same place, all posterior analysis is done with a burnin (of 500, reckoned from trace heatmaps).
 
 The posterior is a high-dimensional object and is therefore difficult to visualize. The most straightforward method to ask questions of the posterior is to prepare marginal distributions (marginals). This is performed in practice by making histograms of one or two parameters at a time from the MCMC chains, marginalizing over the other parameters. Marginals are prepared for samples in normal ordering, inverted ordering, and over both orderings. The preference for either mass ordering is taken as the fraction of samples in that ordering. In addition to marginals reported in mixing angle space (raw from the MCMC), we also prepare marginals transformed into $sin^2(\th{23})$ and $sin^2(2\th{13})$ space.
@@ -461,11 +476,524 @@ In fake data studies in this analysis, the shape of the systematic subspace grea
 
 However, especially in the two-detector case, analysis of systematic marginals is fruitful. The primary strength of two-detector is that the systematic marginals reveal a wealth of information about the performance of the systematic model. For the case of in-model fake data in this technote, we learn what systematics are most important in constraining ND data. We also learn about correlations between systematic parameters through their marginalization biases. Plus, two-detector marginals between the systematic and oscillation subspaces are extremely informative regarding correlations between oscillation and systematic parameters and what systematics drive sensitivity to oscillation parameters.
 
-Rather than visualize the posterior in fit parameter space, we can also visualize how the posterior reproduces data spectra. This is called a posterior predictive check. Using uniform draws from the posterior, we check how well simulated data spectra resemble the data spectrum used for inference. With good posterior prediction, simulated data should center near the data spectrum used for inference, and deviations can reveal issues with the sampling or with the model. When comparing two-detector and extrapolation, we use posterior predictive checks to understand how two-detector better constrains the model.
+Rather than visualize the posterior in fit parameter space, we can also visualize how the posterior reproduces data spectra. This is called a posterior predictive check \cite{ref:stan_posterior_predictive}. Using uniform draws from the posterior, we check how well simulated data spectra resemble the data spectrum used for inference. With good posterior prediction, simulated data should center near the data spectrum used for inference, and deviations can reveal issues with the sampling or with the model. When comparing two-detector and extrapolation, we use posterior predictive checks to understand how two-detector better constrains the model.
 
-\section{In-model fake data studies (TODO)}
+\FloatBarrier
+\section{Results of in-model fake data studies (TODO)}
+See Appendix \ref{sec:posteriors_for_in_model_fake_data_studies} for more marginals for all fake data studies.
 
+We present various in-systematic-model fake data studies to benchmark the performance of two-detector inference versus extrapolation. A study without systematics (stats-only) is a validation closure test. We perform Asimov fake data studies with systematic freedom with a systematic universe at nominal and with a systematic universe with random variations. In the oscillation subspace, the random systematic variations study is performed at both the NOvA 2020 and T2K 2020 best fit points. For all fake data studies, the fake universe is the same between two-detector and extrapolation. The fake data studies interrogate how well in the ideal case (a perfectly predictive ND):
+\begin{itemize}
+  \item How well does two-detector inference constrain the systematic parameters? What systematics are well-and-poorly-constrained? What correlations exist between systematics?
+  \item How well does two-detector inference constrain the oscillation parameters compared to extrapolation? If there is an improvement, how much can we expect in the best case?
+  \item How much does two-detector inference generate a meaningfully different oscillation subspace of the posterior compared to extrapolation? Are there shape differences beyond a change in constraining power? If so, why? Are there correlations between systematics that we can explore to inform us as to what areas of the systematic model would be most suited to value in improvement?
+  \item Is two-detector inference scalable given its computational cost?
+\end{itemize}
+
+\subsection{Stats-only closure test}
+\label{sec:stats_only_closure_test}
+Before performing studies with systematics, we test for mistakes in preparing two-detector or extrapolated FD predictions using a stats-only Asimov fake data study. As two-detector and extrapolation have different prediction-loading procedures, an error in loading predictions could create a difference in effective statistics which would be impossible to disambiguate from a difference in systematic uncertainty without a closure test. Extrapolated predictions without systematic freedom should predict identically to two-detector (non-extrapolated) FD predictions, so any difference in the oscillation posterior without systematic freedom between methods would indicate a problem. Figure \ref{fig:stats_only_posteriors} shows that this is not observed within the Monte-Carlo statistics.
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/no_systs_asimovA_two_det_extrap/2DMarginals/normal_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/no_systs_asimovA_two_det_extrap/2DMarginals/inverted_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/no_systs_asimovA_two_det_extrap/2DMarginals/both_orderings/sin_sq_th23_sin_sq_2_th13.png}
+\end{minipage}
+\caption{2D marginals from the stats-only closure test. Superimposition of marginals indicate that two-detector and extrapolataed predictions have the same effective statistics.}
+\label{fig:stats_only_posteriors}
+\end{figure}
+
+\FloatBarrier
+\subsection{HMC warmup for two-detector and extrapolation}
+Warmup for all fake data studies was successful (all results are shown in Appendix \ref{sec:hmc_warmup_for_in_model_fake_data_studies}) with the only hitch in the fake random systematic variations study for two-detector. In the MINUIT frequentist minimization procedure, the minimization that was chosen has three systematic parameters in a local minimum that is not the global minimum. Figure \ref{fig:hmc_warmup_two_det_local_minimum} shows the result of the minimization for every systematic parameter. \texttt{DIS\-vbarp\-NC\-2pi\_\-2020}'s (middle of Figure \ref{sec:hmc_warmup_for_in_model_fake_data_studies}) fit value is far from its true value but has a small effect on predictions (it only affects some DIS events in NC antineutrino background). Whereas most of the file-based systematics at the right side of Figure \ref{sec:hmc_warmup_for_in_model_fake_data_studies} have fit values strongly following truth (as ND file-based systematics generate large $\chi^2$ for small deviations and have strong shape effects), the minimization failed to find true values for \texttt{Calib\-Shape} and \texttt{Neutron\-MENATE\-File\-Syst}. The minimizer has likely found a local minimum in a space with the file-based systematics, and it is unclear whether the miss on \texttt{DIS\-vbarp\-NC\-2pi\_\-2020} is connected.
+
+Figure \ref{fig:hmc_warmup_two_det_missed_traces} shows the main warmup traces which used Figure \ref{sec:hmc_warmup_for_in_model_fake_data_studies} as an input. With \texttt{Ma\-CC\-RES} the sampler follows the true value (the dashed line), but with the other three systematics mentioned before, the absense of the dashed line indicates it is off the scale, so the sampler is stuck in the local minimum found in the previous minimization step. Main sampling also has all samples in these local minima.
+
+\begin{figure}[hbt]
+  \centering
+  \includegraphics[width=\linewidth]{two_det_covariance_plots/prod51_ndTopological_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024/fit_result_prod51_ndTopological_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_29.png}
+  \caption{Minimization fit result within the multi-stage warmup procedure for two-detector inference for the random systematic variations fake data study.}
+  \label{fig:hmc_warmup_two_det_local_minimum}
+\end{figure}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/traces_warmup/MaCCRES.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/traces_warmup/CalibShape.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/traces_warmup/DISvbarpNC2pi_2020.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/traces_warmup/NeutronMENATEFileSyst.png}
+\end{minipage}
+\caption{HMC main warmup traces for two-detector inference for the random systematic variation fake data study. The dashed line indicates the true value.}
+\label{fig:hmc_warmup_two_det_missed_traces}
+\end{figure}
+
+\FloatBarrier
+\subsection{Results of the fake data study at systematic nominal}
+For extrapolation, 1,840,000 MCMC samples (post-burnin) were collected over 1,319 CPU-hours. For two-detector, 990,000 MCMC samples (post-burnin) were collected over 2,769 CPU-hours. We estimate two-detector inference accumulates MCMC samples about 4 times slower than extrapolation.
+
+Figure \ref{fig:nominal_fake_data_study_syst_pulls} shows 1D marginals of every systematic for extrapolation and two-detector inference. Whereas extrapolation has all systematic marginals driven mostly by the prior, two-detector inference constrains many systematics with the ND data as expected. Two-detector marginals also center near the true value - the minimization method did well to find nominal as the global minimum. Two-detector inference is also informative about which systematics are well-constrained and which are poorly-constrained.
+
+\begin{figure}[hbt]
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/syst_pulls.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/syst_pulls.png}
+  \caption{1D marginals from the systematic subspace for the \textbf{systematic nominal NOvA 2020 best fit fake data study}. The horizontal axis itemizes systematics. The vertical axis is the parameter value for systematics, and redder represents a denser 1D marginal of the posterior for that systematic. \textbf{Top:} Using extrapolation. \textbf{Bottom:} Using two-detector inference.}
+  \label{fig:nominal_fake_data_study_syst_pulls}
+\end{figure}
+
+Figures \ref{fig:nominal_fake_data_study_comparison_1d_oscillation_marginals} and \ref{fig:nominal_fake_data_study_comparison_2d_oscillation_marginals} shows 2D credible contours for oscillation parameters for extrapolation and two-detector inference. In general, two-detector inference performs better at constraining the oscillation parameters. As expected, the largest impact is on \dmsq{32}, the most systematically-uncertain parameter relative to its statistical uncertainty. Compared to extrapolation, two-detector inference realizes a slight improvement in constraining \th{13} which affects the \th{23} 1D marginal through correlation with \th{13}. Something surprising \dcp being affected as strongly as it is since \dcp is largely statistics-limited. The 2D oscillation marginals (Figures \ref{fig:nominal_fake_data_study_extrap_oscillation_marginals} and \ref{fig:nominal_fake_data_study_two_det_oscillation_marginals}) show that overdense regions of the posterior are in different places between extrapolation and two-detector. In 2D \dcp-$sin^2(\th{23})$ space, samples in the lower octant of \th{23} are more likely to have $\dcp \approx 0.82\pi$ for two-detector inference, so the shape difference in the 1D marginal of \dcp is likely due to correlations with the mixing parameters.
+
+Table \ref{tab:nominal_fake_data_study_ordering_octant_fractions} shows mass ordering and \th{23} octant preferences for extrapolation and two-detector inference. Two-detector achieves a slightly higher probability for the correct mass ordering and \th{23} octant. Table \ref{tab:nominal_fake_data_study_ordering_octant_fractions} also shows the difference in constraint on \dmsq{32} with a $1\sigma$ uncertainty band informed by the 1D marginal. As a sanity check, the constraints on \dmsq{32} for extrapolation reported here are similar to those reported from the 3F 2024 Bayesian analysis (1.5\% uncertainty in both mass orderings) \cite{ref:nova_2024_3f_bayesian_analysis}. Two-detector does not just obtain a tighter constraint on \dmsq{32}. Specifically, it disfavors values of smaller magnitude in both mass orderings. This effect is analyzed in Section \ref{sec:investigating_correlations_between_oscillation_and_systematic_parameters}. In this fake data study, two-detector inference has achieved a 12\% stronger constraint on \dmsq{32} in both orderings.
+
+\begin{table}[hbt]
+\centering
+\begin{tabular}{ l l l }
+                 & Extrapolation                                           & Two-detector \\
+  \dmsq{32} (NO) & $+2.387^{+0.036}_{-0.041} = -2.387^{+1.51\%}_{-1.70\%}$ & $+2.386^{+0.039}_{-0.029} = +2.386^{+1.63\%}_{-1.19\%}$ \\
+  \dmsq{32} (IO) & $-2.433^{+0.039}_{-0.036} = -2.433^{+1.60\%}_{-1.48\%}$ & $-2.437^{+0.035}_{-0.032} = -2.437^{+1.42\%}_{-1.29\%}$
+\end{tabular}
+
+\begin{tabular}{ l l l l }
+  \textbf{Extrap.} & Both  & NO    & IO \\
+  Both             & 1.000 & 0.635 & 0.365 \\
+  UO               & 0.507 & 0.333 & 0.174 \\
+  LO               & 0.493 & 0.302 & 0.191
+\end{tabular}
+
+\begin{tabular}{ l l l l }
+  \textbf{Two-det.} & Both  & NO    & IO \\
+  Both              & 1.000 & 0.651 & 0.349 \\
+  UO                & 0.522 & 0.355 & 0.166 \\
+  LO                & 0.349 & 0.296 & 0.183
+\end{tabular}
+\caption{Results from the oscillation subspace of the \textbf{systematic nominal NOvA 2020 best fit fake data study}. \textbf{Left:} Measurement of \dmsq{32} by mass ordering for extrapolation and two-detector inference where the central value is the highest density of the 1D marginal and the uncertainties are informed by the $1\sigma$ interval. \textbf{Middle:} Fraction of samples in each mass ordering and octant of \th{23} for extrapolation. \textbf{Right:} Same but for two-detector inference.}
+\label{tab:nominal_fake_data_study_ordering_octant_fractions}
+\end{table}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_nom_two_det_extrap/1DMarginals/normal_ordering/dmsq32tightscaled_FlatDmSq32.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_nom_two_det_extrap/1DMarginals/inverted_ordering/dmsq32tightscaled_FlatDmSq32.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_nom_two_det_extrap/1DMarginals/normal_ordering/dCP_looped.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_nom_two_det_extrap/1DMarginals/inverted_ordering/dCP_looped.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_nom_two_det_extrap/1DMarginals/both_orderings/sin_sq_th23.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_nom_two_det_extrap/1DMarginals/both_orderings/sin_sq_2_th13.png}
+\end{minipage}
+\caption{1D marginals from the oscillation subspace for the \textbf{systematic nominal NOvA 2020 best fit fake data study}.}
+\label{fig:nominal_fake_data_study_comparison_1d_oscillation_marginals}
+\end{figure}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_nom_two_det_extrap/2DMarginals/normal_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_nom_two_det_extrap/2DMarginals/inverted_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_nom_two_det_extrap/2DMarginals/normal_ordering/dCP_looped_sin_sq_th23.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_nom_two_det_extrap/2DMarginals/inverted_ordering/dCP_looped_sin_sq_th23.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_nom_two_det_extrap/2DMarginals/normal_ordering/sin_sq_th23_sin_sq_2_th13.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_nom_two_det_extrap/2DMarginals/inverted_ordering/sin_sq_th23_sin_sq_2_th13.png}
+\end{minipage}
+\caption{2D credible contours from the oscillation subspace for the \textbf{systematic nominal NOvA 2020 best fit fake data study}. \textbf{Top row:} Normal ordering subspaces of the posteriors. \textbf{Bottom row:} Inverted ordering subspaces of the posteriors.}
+\label{fig:nominal_fake_data_study_comparison_2d_oscillation_marginals}
+\end{figure}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginals/normal_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginals/inverted_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32_both.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginals/normal_ordering/dCP_looped_sin_sq_th23_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginals/inverted_ordering/dCP_looped_sin_sq_th23_both.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginals/normal_ordering/sin_sq_th23_sin_sq_2_th13_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginals/inverted_ordering/sin_sq_th23_sin_sq_2_th13_both.png}
+\end{minipage}
+\caption{2D marginals from the oscillation subspace for the \textbf{systematic nominal NOvA 2020 best fit fake data study for extrapolation}. \textbf{Top row:} Normal ordering subspace of the posterior. \textbf{Bottom row:} Inverted ordering subspace of the posterior.}
+\label{fig:nominal_fake_data_study_extrap_oscillation_marginals}
+\end{figure}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginals/normal_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginals/inverted_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32_both.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginals/normal_ordering/dCP_looped_sin_sq_th23_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginals/inverted_ordering/dCP_looped_sin_sq_th23_both.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginals/normal_ordering/sin_sq_th23_sin_sq_2_th13_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginals/inverted_ordering/sin_sq_th23_sin_sq_2_th13_both.png}
+\end{minipage}
+\caption{2D marginals from the oscillation subspace for the \textbf{systematic nominal NOvA 2020 best fit fake data study for two-detector inference}. \textbf{Top row:} Normal ordering subspace of the posterior. \textbf{Bottom row:} Inverted ordering subspace of the posterior.}
+\label{fig:nominal_fake_data_study_two_det_oscillation_marginals}
+\end{figure}
+
+Figure \ref{fig:nominal_fake_data_study_compared_with_stats_only} shows 2D marginals from this fake data study compared with the marginals from the stats only fake data study (something of a best case scenario). Here, both fake data studies share the same fake universe (both systematic at systematic nominal and oscillation at NOvA 2020 best fit). The only difference is that in this fake data study, extrapolation and two-detector inference have systematic parameter freedom to explore around nominal. Both the ND and FD are perfectly predictive for these studies, so growth of the contours away from stats only indicate difficulty for the sampler to disambiguate systematic and oscillation effects. We see although extrapolation finds slightly worse constraints than the stats only case, two-detector inference matches very closely. Two-detector inference is more effectively using the ND to break systematic-oscillation parameter degeneracies. As a sanity check, it is nice to see that neither method gets \textit{stronger} constraints than stats only which would be impossible.
+
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/extrap_asimovA_no_systs_fake_nom/2DMarginals/normal_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/two_det_asimovA_no_systs_fake_nom/2DMarginals/normal_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32.png}
+\end{minipage}
+\label{fig:nominal_fake_data_study_compared_with_stats_only}
+\caption{2D marginals from the oscillation subspace for the systematic nominal NOvA 2020 best fit fake data study for two-detector inference superimposed with the stats only marginals from Section \ref{sec:stats_only_closure_test}. \textbf{Left:} Extrapolation. \textbf{Right:} Two-detector inference.}
+\end{figure}
+
+\FloatBarrier
+\subsection{Results of the fake data study with random systematic variations (at NOvA 2020 best fit)}
+This study had similar running time to the fake data study at systematic nominal. Figure \ref{fig:random_variations_fake_data_study_syst_pulls} shows the systematic posterior summaries for extrapolation and two-detector inference. As discussed in Section \ref{sec:hmc_warmup_for_in_model_fake_data_studies}, the posterior misses the true values for some systematics in two-detector inference because the warmup procedure did not converge to the typical set for those parameters. However despite this, the sampler was able to perform well throughout the rest of the systematic subspace. Figure \ref{fig:random_variations_fake_data_study_comparison_1d_oscillation_marginals} also shows that the oscillation subspace is well-behaved for two-detector. This fake data study shows that two-detector inference can sample correctly elsewhere if it misses on a few parameters, but it does not gurantee that the sampling will succeed in any case of missed parameters.
+
+Despite the systematic variations, both extrapolation and two-detector inference have constrained the systematic parameters with very similar performance to the fake data study without systematic variations. We take this as a notion of the stability of both methods under in-model systematic variations - both methods get the correct answer for in-model studies. We also observe that the extend of the improvement in constraint on oscillation parameters by using two-detector inference is stable under systematic variations (see Table \ref{tab:random_variations_fake_data_study_ordering_octant_fractions} and Figures \ref{fig:random_variations_fake_data_study_comparison_1d_oscillation_marginals} to \ref{fig:random_variations_fake_data_study_two_det_oscillation_marginals}). In this fake data study, two-detector inference achieves a 12\% (15\%) stronger constraint on \dmsq{32} in normal (inverted) ordering.
+
+\begin{figure}[hbt]
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovA/syst_pulls.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/syst_pulls.png}
+  \caption{1D marginals from the systematic subspace for the \textbf{random systematic variations NOvA 2020 best fit fake data study}. The horizontal axis itemizes systematics. The vertical axis is the parameter value for systematics, and redder represents a denser 1D marginal of the posterior for that systematic. \textbf{Top:} Using extrapolation. \textbf{Bottom:} Using two-detector inference.}
+  \label{fig:random_variations_fake_data_study_syst_pulls}
+\end{figure}
+
+\begin{table}[hbt]
+\centering
+\begin{tabular}{ l l l }
+                 & Extrapolation                                           & Two-detector \\
+  \dmsq{32} (NO) & $+2.381^{+0.035}_{-0.036} = +2.381^{+1.45\%}_{-1.51\%}$ & $+2.390^{+0.032}_{-0.030} = +2.390^{+1.32\%}_{-1.26\%}$ \\
+  \dmsq{32} (IO) & $-2.427^{+0.033}_{-0.036} = -2.427^{+1.36\%}_{-1.48\%}$ & $-2.434^{+0.029}_{-0.030} = -2.434^{+1.17\%}_{-1.23\%}$
+\end{tabular}
+
+\begin{tabular}{ l l l l }
+  \textbf{Extrap.} & Both  & NO    & IO \\
+  Both             & 1.000 & 0.625 & 0.375 \\
+  UO               & 0.510 & 0.338 & 0.172 \\
+  LO               & 0.490 & 0.287 & 0.203
+\end{tabular}
+\begin{tabular}{ l l l l }
+
+  \textbf{Two-det.} & Both  & NO    & IO \\
+  Both              & 1.000 & 0.658 & 0.342 \\
+  UO                & 0.521 & 0.360 & 0.161 \\
+  LO                & 0.480 & 0.298 & 0.182
+\end{tabular}
+\caption{Results from the oscillation subspace of the \textbf{systematic nominal NOvA 2020 best fit fake data study}. \textbf{Left:} Measurement of \dmsq{32} by mass ordering for extrapolation and two-detector inference where the central value is the highest density of the 1D marginal and the uncertainties are informed by the $1\sigma$ interval. \textbf{Middle:} Fraction of samples in each mass ordering and octant of \th{23} for extrapolation. \textbf{Right:} Same but for two-detector inference.}
+\label{tab:random_variations_fake_data_study_ordering_octant_fractions}
+\end{table}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovA_two_det_extrap/1DMarginals/normal_ordering/dmsq32tightscaled_FlatDmSq32.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovA_two_det_extrap/1DMarginals/inverted_ordering/dmsq32tightscaled_FlatDmSq32.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovA_two_det_extrap/1DMarginals/normal_ordering/dCP_looped.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovA_two_det_extrap/1DMarginals/inverted_ordering/dCP_looped.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovA_two_det_extrap/1DMarginals/both_orderings/sin_sq_th23.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovA_two_det_extrap/1DMarginals/both_orderings/sin_sq_2_th13.png}
+\end{minipage}
+\caption{1D marginals from the oscillation subspace for the \textbf{random systematic variations NOvA 2020 best fit fake data study}.}
+\label{fig:random_variations_fake_data_study_comparison_1d_oscillation_marginals}
+\end{figure}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovA_two_det_extrap/2DMarginals/normal_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovA_two_det_extrap/2DMarginals/inverted_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovA_two_det_extrap/2DMarginals/normal_ordering/dCP_looped_sin_sq_th23.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovA_two_det_extrap/2DMarginals/inverted_ordering/dCP_looped_sin_sq_th23.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovA_two_det_extrap/2DMarginals/normal_ordering/sin_sq_th23_sin_sq_2_th13.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovA_two_det_extrap/2DMarginals/inverted_ordering/sin_sq_th23_sin_sq_2_th13.png}
+\end{minipage}
+\caption{2D credible contours from the oscillation subspace for the \textbf{random systematic variations NOvA 2020 best fit fake data study}. \textbf{Top row:} Normal ordering subspaces of the posteriors. \textbf{Bottom row:} Inverted ordering subspaces of the posteriors.}
+\label{fig:random_variations_fake_data_study_comparison_2d_oscillation_marginals}
+\end{figure}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovA/2DMarginals/normal_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovA/2DMarginals/inverted_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32_both.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovA/2DMarginals/normal_ordering/dCP_looped_sin_sq_th23_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovA/2DMarginals/inverted_ordering/dCP_looped_sin_sq_th23_both.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovA/2DMarginals/normal_ordering/sin_sq_th23_sin_sq_2_th13_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovA/2DMarginals/inverted_ordering/sin_sq_th23_sin_sq_2_th13_both.png}
+\end{minipage}
+\caption{2D marginals from the oscillation subspace for the \textbf{random systematic variations NOvA 2020 best fit fake data study for extrapolation}. \textbf{Top row:} Normal ordering subspace of the posterior. \textbf{Bottom row:} Inverted ordering subspace of the posterior.}
+\label{fig:random_variations_fake_data_study_extrap_oscillation_marginals}
+\end{figure}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/2DMarginals/normal_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/2DMarginals/inverted_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32_both.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/2DMarginals/normal_ordering/dCP_looped_sin_sq_th23_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/2DMarginals/inverted_ordering/dCP_looped_sin_sq_th23_both.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/2DMarginals/normal_ordering/sin_sq_th23_sin_sq_2_th13_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/2DMarginals/inverted_ordering/sin_sq_th23_sin_sq_2_th13_both.png}
+\end{minipage}
+\caption{2D marginals from the oscillation subspace for the \textbf{random systematic variations NOvA 2020 best fit fake data study for two-detector inference}. \textbf{Top row:} Normal ordering subspace of the posterior. \textbf{Bottom row:} Inverted ordering subspace of the posterior.}
+\label{fig:random_variations_fake_data_study_two_det_oscillation_marginals}
+\end{figure}
+
+\FloatBarrier
+\subsection{Results of the fake data study with random systematic variations (at T2K 2020 best fit)}
+We investigate the performance of extrapolation and two-detector inference with a different oscillation universe to see how this impacts the difference in constraint on oscillation parameters. Table \ref{tab:random_variations_asimovB_fake_data_study_ordering_octant_fractions} and Figures \ref{fig:random_variations_asimovB_fake_data_study_comparison_1d_oscillation_marginals} to \ref{fig:random_variations_asimovB_fake_data_study_oscillation_marginals} show the results of the study which are qualitatively similar the results at the NOvA 2020 best fit point. With NOvA's baseline, the T2K 2020 best fit point strongly favors normal ordering; the marginals in inverted ordering are noisy because of limited Monte-Carlo statistics. In this oscillation scenario, two-detector inference also constrains \dmsq{32} more strongly than extrapolation (by 14\%). For multiple oscillation scenarios, two-detector inference has the ability to constrain oscillation parameters stronger than extrapolation can.
+
+\begin{table}[hbt]
+\centering
+\begin{tabular}{ l l l }
+                 & Extrapolation                                           & Two-detector \\
+  \dmsq{32} (NO) & $+2.503^{+0.030}_{-0.026} = 2.503^{+1.20\%}_{-1.05\%}$  & $2.517^{+0.024}_{-0.025} = 2.517^{+0.94\%}_{-0.99\%}$ \\
+  \dmsq{32} (IO) & (Not Gaussian-shaped)                                   & (Not Gaussian-shaped)
+\end{tabular}
+
+\begin{tabular}{ l l l l }
+  \textbf{Extrap.} & Both  & NO    & IO \\
+  Both             & 1.000 & 0.999 & 0.001 \\
+  UO               & 0.625 & 0.624 & 0.001 \\
+  LO               & 0.375 & 0.375 & 0.000
+\end{tabular}
+
+\begin{tabular}{ l l l l }
+  \textbf{Two-det.} & Both  & NO    & IO \\
+  Both              & 1.000 & 0.999 & 0.001 \\
+  UO                & 0.638 & 0.638 & 0.001 \\
+  LO                & 0.362 & 0.362 & 0.000
+\end{tabular}
+\caption{Results from the oscillation subspace of the \textbf{systematic nominal NOvA 2020 best fit fake data study}. \textbf{Left:} Measurement of \dmsq{32} by mass ordering for extrapolation and two-detector inference where the central value is the highest density of the 1D marginal and the uncertainties are informed by the $1\sigma$ interval. \textbf{Middle:} Fraction of samples in each mass ordering and octant of \th{23} for extrapolation. \textbf{Right:} Same but for two-detector inference.}
+\label{tab:random_variations_asimovB_fake_data_study_ordering_octant_fractions}
+\end{table}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovB_two_det_extrap/1DMarginals/normal_ordering/dmsq32tightscaled_FlatDmSq32.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovB_two_det_extrap/1DMarginals/inverted_ordering/dmsq32tightscaled_FlatDmSq32.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovB_two_det_extrap/1DMarginals/normal_ordering/dCP_looped.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovB_two_det_extrap/1DMarginals/inverted_ordering/dCP_looped.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovB_two_det_extrap/1DMarginals/both_orderings/sin_sq_th23.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovB_two_det_extrap/1DMarginals/both_orderings/sin_sq_2_th13.png}
+\end{minipage}
+\caption{1D marginals from the oscillation subspace for the \textbf{random systematic variations T2K 2020 best fit fake data study}.}
+\label{fig:random_variations_asimovB_fake_data_study_comparison_1d_oscillation_marginals}
+\end{figure}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovB_two_det_extrap/2DMarginals/normal_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovB_two_det_extrap/2DMarginals/inverted_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovB_two_det_extrap/2DMarginals/normal_ordering/dCP_looped_sin_sq_th23.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovB_two_det_extrap/2DMarginals/inverted_ordering/dCP_looped_sin_sq_th23.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovB_two_det_extrap/2DMarginals/normal_ordering/sin_sq_th23_sin_sq_2_th13.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/fake_rand_0_asimovB_two_det_extrap/2DMarginals/inverted_ordering/sin_sq_th23_sin_sq_2_th13.png}
+\end{minipage}
+\caption{2D credible contours from the oscillation subspace for the \textbf{random systematic variations T2K 2020 best fit fake data study}. \textbf{Top row:} Normal ordering subspaces of the posteriors. \textbf{Bottom row:} Inverted ordering subspaces of the posteriors.}
+\label{fig:random_variations_asimovB_fake_data_study_comparison_2d_oscillation_marginals}
+\end{figure}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovB/2DMarginals/normal_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovB/2DMarginals/normal_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32_both.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovB/2DMarginals/normal_ordering/dCP_looped_sin_sq_th23_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovB/2DMarginals/normal_ordering/dCP_looped_sin_sq_th23_both.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovB/2DMarginals/normal_ordering/sin_sq_th23_sin_sq_2_th13_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovB/2DMarginals/normal_ordering/sin_sq_th23_sin_sq_2_th13_both.png}
+\end{minipage}
+\caption{2D marginals from the oscillation subspace for the \textbf{random systematic variations T2K 2020 best fit fake data study}. \textbf{Top row:} Normal ordering subspace of the posterior for extrapolation. \textbf{Bottom row:} Inverted ordering subspace of the posterior for two-detector inference.}
+\label{fig:random_variations_asimovB_fake_data_study_oscillation_marginals}
+\end{figure}
+
+\FloatBarrier
+\subsection{Investigating correlations between oscillation and systematic parameters (TODO)}
+\label{sec:investigating_correlations_between_oscillation_and_systematic_parameters}
+We aim to understand why two-detector inference is constraining the oscillation parameters differently than extrapolation with focus on the improved constraint on \dmsq{32}. We first turn to 2D marginals of systematic parameters with \dmsq{32}. Figure \ref{fig:nominal_fake_data_study_maccres_dmsq32_marginals} shows an example of a systematic that is largely uncorrelated with \dmsq{32}; most systematics look like this. We scanned through all 2D marginals with \dmsq{32} for extrapolation and two-detector inference and found that \texttt{Calib\-Shape}, \texttt{Corr\-MuE\-Scale\-Syst\-2024}, and \texttt{Ma\-CC\-RES} have correlations with \dmsq{32} in extrapolation but not two-detector inference. In fact, \textit{no}, systematics appear correlated with \dmsq{32}. (Whenever something happens why is it always you three?) It is not surprising these three systematics are most correlated with \dmsq{32} with two-detector inference. \texttt{Corr\-MuE\-Scale\-Syst\-2024} controls the detector response to muon energy deposition; understimating muon energy causes underestimation of neutrino energy which causes a shift in energy space of the entire numu energy spectrum which affects the measurement of \dmsq{32}. \texttt{Ma\-CC\-RES} is a leading interaction cross section systematic uncertainty controlling the rate of resonant bayron interactions, a large contributor to the dip region. It is somewhat surprising that \texttt{Calib\-Shape} is relevant. absolute and relative calibration systematics should have larger effects, but historically, detector calibration uncertainties can \texttt{increase} after applying the extrapolation procedure to FD predictions because extrapolation relies on (mostly) functionally identical performance of the ND and the FD. Two-detector makes no such assumption as much as the systematic model does not. The correlations the detector and cross section systematics (including \texttt{Calib\-Shape} and \texttt{Ma\-CC\-RES}) are weak - the largest correlations are with the muon energy scale systematics. Figure \ref{fig:nominal_fake_data_study_correlated_systematics_dmsq32_marginals} shows 2D marginals of \dmsq{32} with these systematics. While extrapolation has to sample through correlations with the systematics, two-detector inference is able to more effectively constrain the systematic parameters to break the degeneracy with \dmsq{32} and achieve a stronger constraint. The same effect is shown in the random systematic variations fake data study in Figure \ref{fig:random_variations_fake_data_study_correlated_systematics_dmsq32_marginals}.
+
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginalsOfSysts/normal_ordering/ZNormCCQE_dmsq32tightscaled_FlatDmSq32_marginal.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginalsOfSysts/normal_ordering/ZNormCCQE_dmsq32tightscaled_FlatDmSq32_marginal.png}
+\end{minipage}
+\caption{2D marginals of \texttt{ZNorm\-CCQE} and \dmsq{32} from the systematic nominal NOvA 2020 best fit fake data study. \textbf{Left:} Extrapolation. \textbf{Right:} Two-detector inference.}
+\label{fig:nominal_fake_data_study_maccres_dmsq32_marginals}
+\end{figure}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginalsOfSysts/normal_ordering/CalibShape_dmsq32tightscaled_FlatDmSq32_marginal.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginalsOfSysts/normal_ordering/CalibShape_dmsq32tightscaled_FlatDmSq32_marginal.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginalsOfSysts/normal_ordering/CorrMuEScaleSyst2024_dmsq32tightscaled_FlatDmSq32_marginal.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginalsOfSysts/normal_ordering/CorrMuEScaleSyst2024_dmsq32tightscaled_FlatDmSq32_marginal.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginalsOfSysts/normal_ordering/MaCCRES_dmsq32tightscaled_FlatDmSq32_marginal.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginalsOfSysts/normal_ordering/MaCCRES_dmsq32tightscaled_FlatDmSq32_marginal.png}
+\end{minipage}
+\caption{Some 2D marginals of systematics and \dmsq{32} from the systematic nominal NOvA 2020 best fit fake data study. \textbf{Top row:} Extrapolation. \textbf{Bottom row:} Two-detector inference.}
+\label{fig:nominal_fake_data_study_correlated_systematics_dmsq32_marginals}
+\end{figure}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovA/2DMarginalsOfSysts/normal_ordering/CalibShape_dmsq32tightscaled_FlatDmSq32_marginal.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/2DMarginalsOfSysts/normal_ordering/CalibShape_dmsq32tightscaled_FlatDmSq32_marginal.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovA/2DMarginalsOfSysts/normal_ordering/CorrMuEScaleSyst2024_dmsq32tightscaled_FlatDmSq32_marginal.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/2DMarginalsOfSysts/normal_ordering/CorrMuEScaleSyst2024_dmsq32tightscaled_FlatDmSq32_marginal.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFakeRand0_extrap_2024_extrap_2024_asimovA/2DMarginalsOfSysts/normal_ordering/MaCCRES_dmsq32tightscaled_FlatDmSq32_marginal.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/2DMarginalsOfSysts/normal_ordering/MaCCRES_dmsq32tightscaled_FlatDmSq32_marginal.png}
+\end{minipage}
+\caption{Some 2D marginals of systematics and \dmsq{32} from the random systematic variations NOvA 2020 best fit fake data study. \textbf{Top row:} Extrapolation. \textbf{Bottom row:} Two-detector inference.}
+\label{fig:random_variations_fake_data_study_correlated_systematics_dmsq32_marginals}
+\end{figure}
+
+The muon energy scale systematic part of the systematic model has 5 parameters \cite{ref:nova_muon_energy_scale_systematics}:
+\begin{itemize}
+  \item \texttt{CorrMuEScaleSyst2024}: Component fully correlated between the muon catcher, the ND, and the FD.
+  \item \texttt{UnCorrFDMuEScaleSyst2024}: Component only applied to the FD.
+  \item \texttt{UnCorrNDMuEScaleSyst2024}: Component only applied to the ND except the muon catcher.
+  \item \texttt{UnCorrMuCatMuESyst2024}: Component only applied to the muon catcher.
+  \item \texttt{PileupMuESyst2024}: Lengthens or shortens tracks in the ND (and muon catcher) to account for neutron pile up.
+\end{itemize}
+
+\todo[inline]{Note: By mistake, UnCorrNDMuEScaleSyst2024 and PileupMuESyst2024 were not included in the extrapolation analysis. Two-detector inference had these systematics included in the study, and random systematic variations included variations in these systematics. Extrapolation was unaware of these systematics, did not have freedom to explore them, and random systematic variations did not include these - in effect for extrapolation, the random systematic variations studies left these systematics at nominal, and they were not explored. Yes, the muon energy scale systematics are important in quantifying the difference in performance between two-detector and extrapolation, but re-doing the sampling for extrapolation with these systematics included could only \textit{worsen} its constraints, \textit{not improvements}. We don't expect that re-doing the study with the additional systematics for extrapolation will change any conclusions, so we only leave this as a note to fix in future studies.}
+
+\todo[inline]{A nice study to run here would be a repeat of the random systematic variation fake data study except we only use the muon energy scale systematics to see how much better two-detector does over extrapolation. However, the omission of some of the muon energy scale systematics in extrapolation makes this difficult - if we want the correct answer from this study, we should probably fix the extrapolated predictions to include all of the muon energy scale systematics.}
+
+\FloatBarrier
 \section{Implementation details}
+First, some defitions of custom language. Some intentional choices are made regarding names of key structures in the two-detector framework. Unfortunately, "sample" is an overloaded keyword (MCMC sample and counting experiment sub-sample). One solution to disambiguate the ideas is to chose a completely different name for sub-samples and explicitly denote MCMC samples as MCMC. We have chosen the following (intentionally cute) convention:
+\begin{itemize}
+  \item A \textbf{Recipe} is a counting experiment sub-sample. In the implementation, a Recipe is fully specified, i.e. it knows what dataset(s) it's loaded from, its selection, its kinematic axes, and how its fake data universe should be prepared during a fake data study.
+  \item A \textbf{Cookbook} is a set of Recipes. The Cookbook is a key analysis structure and is commonly passed around as a parameter. A cookbook is designed to indicate a complete description of how a set of counting experiment sub-samples should be prepared for performing inference.
+\end{itemize}
 
 \subsection{High level structure}
 All code to execute two-detector Bayesian inference analyses lives in \href{https://github.com/novaexperiment/novasoft/tree/main/3FlavorAna/TwoDet}{\texttt{3FlavorAna/TwoDet}} in novasoft. The structure of the area is as follows:
@@ -558,7 +1086,8 @@ If any sub-parser fails, the cookbook parsing will fail and report which sub-par
 
 To extrapolate FD samples, we must associate each FD sample to some ND samples. See Section \ref{sec:Nuances_with_loading_extrapolated_samples} for details. The core library contains structures to assist in preparing the extrapolated samples. \texttt{Spec/Quantiles.h} contains specialized \texttt{FinalState} objects which represent Ehad and pT quantiles for use in preparing ND and FD samples for extrapolation. \texttt{Spec/CAFLoading.h} contains utilities which associate FD extrapolated final states to the corresponding ND final states used for extrapolation.
 
-\subsection{MCMC sampling structure (TODO move fitter tech/metadata structures to new Sampling.h/cxx)}
+\subsection{MCMC sampling structure (TODO)}
+\todo[inline]{Although the MCMC sampling structures are stable, I want to move them around before I merge into main. I'll document this section after I move them around.}
 
 \subsection{MCMC marginalization}
 In extrapolation analyses, the systematic subspace of the posterior is not very informative as to what the systematic model is doing because extrapolated predictions often behave such that systematics are driven by the prior. Bayesian two-detector is different, however, in that the systematic subspace of the posterior is highly informative as to the result of the analysis. However, with more than 100 systematic parameters, efficient marginalization of high statistics MCMC chains is necessary. The Bayesian two-detector analysis uses \texttt{ana::BayesianMarginalDeck} to compute all marginals in one (or a few) pass(es) of the MCMC chain(s). \texttt{Marginalization.h/cxx} provides extra support for computing marginals:
@@ -572,7 +1101,8 @@ In extrapolation analyses, the systematic subspace of the posterior is not very 
 \end{itemize}
 \texttt{Transforms.h/cxx} include \texttt{ana::SampleTransform}s for transforming PMNS parameters from raw angles.
 
-\subsection{The plotting library (TODO this is still under construction)}
+\subsection{The plotting library (TODO)}
+\todo[inline]{The plotting library is still evolving, so I won't document it yet. Once it's finished, I'll flesh out this section.}
 
 \section{How-to: Step-by-step instructions to perform an inference analysis}
 This section will walk you through how to a perform a Bayesian two-detector inference analysis starting from the CAFs and ending at marginal distributions of the posterior. As an example, we will extract the posterior for a two-detector randomly systematically varied fake data study at asimov A using ND numu samples in Q3Q0 space and ND nue samples in ThetaLepE space using the 2024 two-detector list of systematics. The analysis cookbook for this configuration is:
@@ -712,7 +1242,7 @@ The minimum bin content to keep can be changed to tune how aggressively to squas
 
 \todo[inline]{This macro needs to be extended to also operate on ND NuMI data spectra. We need to extend the bins-to-keep decision algorithm to also look at NuMI data spectra, and the bins-to-keep needs to be identical between the prediction and the NuMI data.}
 
-\subsection{Nuances with loading extrapolated samples (TODO cite extrap technote) (TODO make cleaner method for detecting whether a prediction is extrapolated.}
+\subsection{Nuances with loading extrapolated samples}
 \label{sec:Nuances_with_loading_extrapolated_samples}
 The following sections are \textbf{not} documentation on the typical 3F pipeline for loading extrapolated predictions. This is a parallel implementation (reproduction) of the extrapolation technique using the "cookbook" framework for the purpose of comparing two-detector inference to a Bayesian extrapolation analysis.
 
@@ -766,6 +1296,8 @@ which will partition jobs by horn current such that the union of the two cookboo
 \end{verbatim}
 
 Extrapolated predictions will be loaded using real ND data. Fake data studies with fake (MC) ND data in extrapolated predictions are prepared using a custom implementation of the \textbf{Indiana Jones} technique (see Section \ref{sec:additional_post_processing_for_extrapolated_samples}).
+
+\todo[inline]{The method we use for detecting whether a recipe is extrapolated is kind of dumb. We could make this cleaner in the code.}
 
 \subsection{Additional post-processing for extrapolated samples}
 \label{sec:additional_post_processing_for_extrapolated_samples}
@@ -1037,8 +1569,10 @@ cafe -bq ExtrapolatePredictions.C \
 Now, the cookbook, \texttt{prod51\_\-fdEhad\-Quants\_\-Official\-FD\_\-nom\-Extrap\-IJ\-Fake\-Rand0}, is ready for use in analysis.
 
 \subsection{Loading NuMI data (TODO)}
+\todo[inline]{As we have not yet needed to load real (ND) NuMI data, this section is blank. In principle, this is a simple macro to write, and this section will be filled in whent his is done.}
 
-\subsection{Loading cosmic predictions (TODO need to copy over the cosmic loader macro)}
+\subsection{Loading cosmic predictions (TODO)}
+\todo[inline]{This is a TODO because the current form of the two-det codebase doesn't have the macro, but it's easy to port. The studies in this technote just re-used an old run of prod5.1 cosmics.}
 
 \subsection{Estimating the covariance matrix for two-detector configurations}
 To expidite MCMC warmup for the two-detector case, we supply an initial guess of the inverse metric. We do this in two steps: one step for systematics and one step for oscillation parameters.
@@ -1301,8 +1835,59 @@ The second parameter is the output filepath for the concatenated chain. This out
 
 This macro will try to preserve other metadata in the ROOT files other than the main MCMC chain itself.
 
-\subsection{MCMC convergence checks (TODO and include posterior predictive)}
+\subsection{MCMC convergence checks (TODO extra include split posterior and posterior predictive for topological ND samples)}
 \label{sec:mcmc_convergence_checks}
+The first line of defense for checking for MCMC convergence is A. Sztuc's MCMC Diagnostics package \cite{ref:mcmc_diagnostics} which computes autocorrelations, $\widehat{R}$, trace heatmaps, and some split posterior plots. See the package for how to use it.
+
+We need to choose a burnin value. A good first step before analyzing the posterior is to plot everything from the package and first look at the trace heatmaps. Figure \ref{fig:example_trace_heatmap} shows an example for \dcp from the sampling job from the previous section. Since we seeded all parallel chains at the same spot, we need to throw away the first $n$ samples where $n$, the burnin, is chosen such that the posterior is not biased. This can usually be dead-reckoned from the trace heatmap - we chose 500 from the \dcp heatmap because \dcp has the longest (non-mass-ordering) autocorrelations and because sampling appears stochastic afterwards. If this was a poor choice, then future split posterior plots will say so.
+\begin{figure}[hbt]
+  \centering
+  \includegraphics[width=\linewidth,page=3]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/trace_plots.pdf}
+  \label{fig:example_trace_heatmap}
+  \caption{Example trace heatmap for \dcp from the example sampling job.}
+\end{figure}
+
+Now that the burnin has been chosen, re-compute the plots from MCMC diagnostics with the \texttt{--burniin} option. See how long the autocorrelations are for each parameter. If your chains are not much longer than the autocorrelations, you need longer MCMC chains. You shouldn't \textit{ignore} the $\widehat{R}$ plots, but if many chains are showing high $\widehat{R}$, this isn't necessarily an issue because of the highly multimodal posterior. Instead, the split posterior plots are a more informative diagnostic. These plots compare subsets of the MCMC chains to see how well they agree:
+\begin{itemize}
+  \item Left/right side of chains compare, for every chain, sample indices less than $N/2$ and greater than $N/2$ where $N$ is the number of samples per chain to diagnose whether you have insufficient burnin or chains that are too short.
+  \item First/second half of chains compare different batches of entire chains. This diangoses whether your chains are mixing through the posterior well enough.
+\end{itemize}
+
+\todo[inline]{I intend to write more elaborate split posterior diagnostic plots in the TwoDet area to add to those in MCMC diagnostics.}
+
+Next, we can perform posterior predictive checks. First, the posterior "trace" plotting style where the data spectrum used for sampling is superimposed with many draws from the posterior which are represented as traces. Use \texttt{Plot\-Posterior\-Traces\-.C}. To sample uniformly from the posterior, we choose MCMC samples at random; each trace is a simulated data spectrum. The posterior "heatmap" plotting style effectively bins the traces into a heatmap on a vertical color scale to show, for every bin, what the distribution of the posterior is. See Figure \ref{fig:example_1d_posterior_predictive} for examples. The traces give you a better idea of the outliers in the posterior. For example, if you use 3000, traces, you expect about 15 traces with greater than $3\sigma$ variations if the posterior around each bin is roughly Gaussian. If the trace plots make you surprised about the character of the outliers, this could indicate an issue with your sampling or your model. The heatmaps give you a better idea of how well the entire posterior follows the data. The posterior may not track the data exactly, but it should be close. If the posterior does not follow the data well, this could also indicate an issue.
+
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/posterior_predictive/simulated_traces/FD_NueHighPID_fhc.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/posterior_predictive/simulated_heatmap/FD_NueHighPID_fhc.png}
+\end{minipage}
+\label{fig:example_1d_posterior_predictive}
+\caption{Example posterior predictive plots for the FD nue FHC high PID sample from the example sampling job. \textbf{Left:} Trace plotting style. \textbf{Right:} Heatmap plotting style.}
+\end{figure}
+
+\todo[inline]{These plotting styles only work for 1D distributions. Visualizing these checks for 2D distributions is challenging - how do we learn the same information for the 2D topological samples? Can we just do the 1D plotting on the 1D internal representations of the topological samples and then map back into 2D space when we see something interesting?}
+
+We can also perform a posterior predictive study where we prepare posterior predictive $p$ values; the $p$ value is the fraction of the posterior that is greater than the data for any statistic that's a function of the data. As a view of how well the posterior represents the entire data spectra, we can compute an ensemble of $p$ values where the $p$ values are the bin content for every bin. $p > 0.5$ ($p < 0.5$) means this bin tends to be overestimated (underestimated) by the posterior. This has the benefit of being easily visualizable for 2D data spectra like ND topological samples. Figure \ref{fig:example_posterior_p_values} shows examples. The weakness of the $p$ value checks, however, is that it doesn't tell you by \textit{how much} the posterior misrepresents the data. $p = 1.0$ could mean that the entire posterior is marginaly above the data. We recommend that for unexpected regions with large or small $p$ values that the analyzer not immediately decide there is a problem but instead use a different plotting technique to investigate that region of phase space. Use \texttt{Plot\-Posterior\-P\-Bin\-Content\-.C}.
+
+\begin{figure}[hbt]
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/posterior_predictive/p_value_bin_content/FD_NueHighPID_fhc.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFakeRand0_two_det_2024_two_det_2024_asimovA/posterior_predictive/p_value_bin_content/ND_MuPiEtc_fhc.png}
+\end{minipage}
+\label{fig:example_posterior_p_values}
+\caption{Example posterior predictive $p$ value as bin content from the example sampling job. \textbf{Left:} FD nue FHC high PID sample. \textbf{Right:} ND numu FHC MuPiEtc sample.}
+\end{figure}
 
 \subsection{Posterior analysis}
 The posterior is a high-dimensional object, making it difficult to visualize. The most straightforward tactic for visualizing the posterior is to marginalize it, meaning to represent distributions of the posterior in one or two dimensions while integrating over all other parameters. For MCMC, this is performed by binning samples into a histogram as you would any MC dataset.
@@ -1342,8 +1927,79 @@ To superimpose marginals in a comparison-plot style, use \texttt{ana::\-Plot\-Sa
 
 \section{Diagnosing poorly-performing HMC (warmup) - A Stan survival guide (TODO)}
 \label{sec:diagnosing_poorly_performing_mcmc_warmup}
+\todo[inline]{Cullen hasn't written this section yet for the sake of finishing the technote in a timely manner, but he wants to! If you think this would be very useful, let him know. If you're having some sort of Stan crisis, also let him know and he might be able to help you!}
+
 \section{Wishlist for the future}
 
-\end{document}
+\todo[inline]{Better MINUIT minimization analysis - it'd be nice to know how much pseudoexperiments are clustering and how many candidate systematic minima are being found.}
 
-\todo[inline]{Better MINUIT minimization analysis - it'd be nice to know how much pseudoexperiments are clustering and how many candidate systematic minima are being found}
+\todo[inline]{File-based predictions have MC statistical noise that's unphysical. We think this is complicating the MINUIT minimization. Perhaps we can use a smoothing method or load in wider kinematic bins then rebin?}
+
+\FloatBarrier
+\newpage
+\printbibliography
+
+\FloatBarrier
+\appendix
+
+\section{HMC warmup for in-model fake data studies (TODO)}
+\label{sec:hmc_warmup_for_in_model_fake_data_studies}
+
+\FloatBarrier
+\section{More marginals from fake data studies}
+\label{sec:posteriors_for_in_model_fake_data_studies}
+
+\subsection{Systematic nominal NOvA 2020 best fit fake data study}
+\begin{figure}[hbt]
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/syst_pulls.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/syst_pulls.png}
+  \caption{1D marginals from the systematic subspace for the \textbf{systematic nominal NOvA 2020 best fit fake data study}. The horizontal axis itemizes systematics. The vertical axis is the parameter value for systematics, and redder represents a denser 1D marginal of the posterior for that systematic. \textbf{Top:} Using extrapolation. \textbf{Bottom:} Using two-detector inference.}
+  \label{fig_app:nominal_fake_data_study_syst_pulls}
+\end{figure}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginals/normal_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginals/inverted_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32_both.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginals/normal_ordering/dCP_looped_sin_sq_th23_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginals/inverted_ordering/dCP_looped_sin_sq_th23_both.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginals/normal_ordering/sin_sq_th23_sin_sq_2_th13_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_fdEhadQuants_OfficialFD_nomExtrapIJFake_extrap_2024_extrap_2024_asimovA/2DMarginals/inverted_ordering/sin_sq_th23_sin_sq_2_th13_both.png}
+\end{minipage}
+\caption{2D marginals from the oscillation subspace for the \textbf{systematic nominal NOvA 2020 best fit fake data study for extrapolation}. \textbf{Top row:} Normal ordering subspace of the posterior. \textbf{Bottom row:} Inverted ordering subspace of the posterior.}
+\label{fig_app:nominal_fake_data_study_extrap_oscillation_marginals}
+\end{figure}
+
+\begin{figure}[hbt]
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginals/normal_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginals/inverted_ordering/sin_sq_th23_dmsq32tightscaled_FlatDmSq32_both.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginals/normal_ordering/dCP_looped_sin_sq_th23_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginals/inverted_ordering/dCP_looped_sin_sq_th23_both.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginals/normal_ordering/sin_sq_th23_sin_sq_2_th13_both.png}
+  \includegraphics[width=\linewidth]{two_det_sampling_plots/prod51_ndTopologicalfdEhadQuants_NumuQ3Q0NueThetaLepE_nomFake_two_det_2024_two_det_2024_asimovA/2DMarginals/inverted_ordering/sin_sq_th23_sin_sq_2_th13_both.png}
+\end{minipage}
+\caption{2D marginals from the oscillation subspace for the \textbf{systematic nominal NOvA 2020 best fit fake data study for two-detector inference}. \textbf{Top row:} Normal ordering subspace of the posterior. \textbf{Bottom row:} Inverted ordering subspace of the posterior.}
+\label{fig_app:nominal_fake_data_study_two_det_oscillation_marginals}
+\end{figure}
+
+\end{document}
