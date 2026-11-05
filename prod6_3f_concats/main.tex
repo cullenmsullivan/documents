@@ -1,0 +1,376 @@
+\documentclass{article}
+\usepackage[style=phys,maxbibnames=2]{biblatex}
+\usepackage[left=0.75in,right=0.75in,top=1.25in,bottom=1.25in]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{lineno}
+\usepackage{relsize}
+\usepackage{todonotes}
+
+\addbibresource{references.bib}
+
+\title{Technote: Production 6 3F group concats}
+\author{Cullen Sullivan}
+\date{\today}
+
+\linenumbers
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+
+\section{Introduction}
+Iterating over full datasets ("the CAFs") is cumbersome for analysis. A "concat" is a reduced dataset where we only keep events passing a loose preselection ("decaffing") and removing branches we don't need ("reducing").
+This document details the methods used to produce concats for the 3 flavor group.
+
+The selections for the prod6 concats are more or less copied from prod5.1 \cite{ref:prod51_concats} except using the new ML vertexer, particle ID, and energy estimator where appropriate.
+
+An analysis with full selections should be identical when prepared using CAFs and concats, so we include validation spectra demonstrating this for every concat.
+
+This is an actively developing document and will be updated as the analysis progresses. Currently, we mostly have \texttt{v1} concats, indicating that selections are copied from prod5.1 with minimal edits and untuned for prod6. Datasets may not be final, and no file-based systematic variation concats are available.
+
+\todo[inline]{An ORANGE todo note like this one indicates where an analyzer should proceed with caution because the dataset is unlikely to be final for some known reason.}
+
+\section{Preparing concats}
+We use the "reducer macro" technique to prepare the concats. The macros that do this for Ana2027 are kept in \texttt{3Flavor\-Ana/\-Ana\-2027/\-reducer}. Many configuration files are kept in this area for submitting different types of concats, and we use Fermigrid to iterate over the CAFs. For example,
+\begin{verbatim}
+  submit_cafana.py -f reduce_ana27_numu_nonswap_fhc.cfg
+\end{verbatim}
+prepares FD FHC numu nonswap concats using the arguments in the configuration file. As of the \texttt{v1} run of concats, all job configurations output 100 files per concat definition. Output names of the files will be \texttt{CONCAT\_\-NAME.N\_\-of\_\-100.\-root} For each concat definition, once all jobs have been successfully received (potentially after draining) concats are moved off of PNFS scratch and onto PNFS persistent. On persistent, we make the SAM definition for the concats:
+\begin{verbatim}
+  ls *root > files.txt \# sam_add_dataset wants a list of files.
+  sam_add_dataset -n <dataset name> -f files.txt
+  rm files.txt
+\end{verbatim}
+If passed the raw filenames from the job output, \texttt{sam\_\-add\_\-dataset} will prepend some hash to each file before registering the file. It is also useful to generate the list of files under xrootd paths for the CAFAna dataset cache (either for everyone or for your personal cache at \texttt{\$CAFANA\_\-DATASET\_\-CACHE\_\-DIR}):
+\begin{verbatim}
+  samweb take-snapshot <dataset name>
+  cache_state.py --list-cached --xrootd -ss latest -d <dataset name>
+  mv cached.list <your cache directory>/<dataset name>.list
+\end{verbatim}
+The concat should now be queryable on SAM.
+
+\section{Selections}
+\subsection{FD numu selection}
+FD numu selections require basic quality (\texttt{k\-Numu\-Basic\-Quality}). For \texttt{v1}, we use a copy of the 2024 version for FD containment except using the ML vertexer (\texttt{k\-Numu\-Contain\-FD2024\_\-Prod6}).
+\todo[inline]{v2 of this concat should use tuned prod6 containment.}
+FD numu selections also require loose cosmic rejection. Like for prod5.1, we require numu containment PID (\texttt{k\-Numu\-Cont\-PID}) to be greater than 0.4. Like in prod5.1, we also require the numu CVN score to be greater than 0, except for prod6 we use transformer CVN.
+
+\subsection{FD nue selection}
+FD nue selections require basic quality (using the ML vertexer) (\texttt{k\-Nue\-2024\-FD\-Basic\-Quality\_\-Prod6}).
+\todo[inline]{v2 of this concat should use proper prod6 basic quality.}
+Like in prod5.1, the nue CVN score is required to be greater than 0.5, except for prod6 we use transformer CVN.
+
+\subsection{ND numu selection}
+ND numu selections require basic quality (\texttt{k\-Numu\-Basic\-Quality}). For \texttt{v1}, we use a copy of the 2024 version for ND containment except using the ML vertexer (\texttt{k\-Numu\-Contain\-ND2024\_\-Prod6}).
+\todo[inline]{v2 of this concat should use tuned prod6 containment.}
+
+\subsection{ND nue selection}
+ND nue concats include both nues and (un)contained numus because the numus are required for BEN decomp.
+
+The nue selection requires basic reconstruction quality using the ML vertexer (\texttt{k\-Nue\-2024\-Reco\-Quality\_\-Prod6}), that the vertex is contained in the fiducial volume using the ML vertexer (\texttt{k\-Nue\-2024\-ND\-Fiducial\_\-Prod6}), and prongs are contained using the ML vertexer (\texttt{k\-Nue\-2024\-ND\-Contain\_\-Prod6}).
+
+\todo[inline]{v2 of this concat should use proper prod6 reconstruction quality and containment cuts.}
+
+Contained numus require basic quality (\texttt{k\-Numu\-Basic\-Quality}), either that the muon track is contained (\texttt{k\-Numu\-Contain\-ND}) or that all prongs are contained (\texttt{k\-Numu\-Contain\-ND\-2024\_\-Prod6}), and either REM ID being higher than 0.75 (\texttt{k\-Numu\-NC\-Rej}) or REM ID being higher than 0.30 and numu CVN score being higher than 0.76 (using the transformer score) (\texttt{k\-Numu\-2024\-PID\_\-Prod6}).
+
+Uncontained numus have the same basic quality and PID requirements as contained numus. They also require failure of either \texttt{k\-Numu\-Contain\-ND}, \texttt{k\-Numu\-Contain\-ND\-2024\_\-Prod6}, or a BEN-specific cut, \texttt{k\-BEN\-Ka\-Numu\-Contain}, a cut that requires the start and stop of kalman tracks to be contained. The uncontained numus do require fiducial containment of the (ML) vertex and the kalman start and stop points (\texttt{k\-BEN\-Ka\-Numu\-Fiducial\_\-Prod6}).
+
+\todo[inline]{These cuts were ported by Cullen who is not a BEN decomp expert. A BEN decomp champion should revisit these cuts and decide whether they are appropriate for prod6.}
+
+\section{Dataset definitions: concats and parent CAFs}
+
+\subsection{FD MC datasets}
+The FD MC datasets are tagged as "nonswap," "fluxswap," and "tauswap" and are generated from the corresponding CAFs.
+The \texttt{v1} (most recent) concats are for nue:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R25-06-04-prod6.f_fd_genie_N2420i0211b_nonswap_fhc_nova_full_v1_nue2027
+prod_sumdecaf_R25-06-04-prod6.f_fd_genie_N2420i0211b_fluxswap_fhc_nova_full_v1_nue2027
+prod_sumdecaf_R25-06-04-prod6.f_fd_genie_N2420i0211b_tauswap_fhc_nova_full_v1_nue2027
+prod_sumdecaf_R25-06-04-prod6.f_fd_genie_N2420i0211b_nonswap_rhc_nova_full_v1_nue2027
+prod_sumdecaf_R25-06-04-prod6.f_fd_genie_N2420i0211b_fluxswap_rhc_nova_full_v1_nue2027
+prod_sumdecaf_R25-06-04-prod6.f_fd_genie_N2420i0211b_tauswap_rhc_nova_full_v1_nue2027
+\end{verbatim}}
+and for numu:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R25-06-04-prod6.f_fd_genie_N2420i0211b_nonswap_fhc_nova_full_v1_numu2027
+prod_sumdecaf_R25-06-04-prod6.f_fd_genie_N2420i0211b_fluxswap_fhc_nova_full_v1_numu2027
+prod_sumdecaf_R25-06-04-prod6.f_fd_genie_N2420i0211b_tauswap_fhc_nova_full_v1_numu2027
+prod_sumdecaf_R25-06-04-prod6.f_fd_genie_N2420i0211b_nonswap_rhc_nova_full_v1_numu2027
+prod_sumdecaf_R25-06-04-prod6.f_fd_genie_N2420i0211b_fluxswap_rhc_nova_full_v1_numu2027
+prod_sumdecaf_R25-06-04-prod6.f_fd_genie_N2420i0211b_tauswap_rhc_nova_full_v1_numu2027
+\end{verbatim}}
+which are based on parent CAFs:
+{\smaller\begin{verbatim}
+prod_caf_R25-06-04-prod6.f_fd_genie_nonswap_fhc_nominal_Prod6_official
+prod_caf_R25-06-04-prod6.f_fd_genie_fluxswap_fhc_nominal_Prod6_official
+prod_caf_R25-06-04-prod6.f_fd_genie_tauswap_fhc_nominal_Prod6_official
+prod_caf_R25-06-04-prod6.f_fd_genie_nonswap_rhc_nominal_Prod6_official
+prod_caf_R25-06-04-prod6.f_fd_genie_fluxswap_rhc_nominal_Prod6_official
+prod_caf_R25-06-04-prod6.f_fd_genie_tauswap_rhc_nominal_Prod6_official
+\end{verbatim}}
+
+\todo[inline]{WARNING: THESE v1 FD MC CONCATS ARE BASED ON CAFS FROM PRE-COSMIC-CVN RESPIN AND NEED TO BE REMADE!}
+
+\subsection{FD cosmic datasets}
+\todo[inline]{We are waiting for the dust to settle on the cosmic rejection cuts for prod6 before preparing prod6 concats.}
+
+\subsection{ND MC datasets}
+The \texttt{v1} (most recent) concats are for nue:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R25-06-04-prod6.f_nd_genie_N2420i0211b_nonswap_fhc_nova_full_v1_nue2027
+prod_sumdecaf_R25-06-04-prod6.f_nd_genie_N2420i0211b_nonswap_rhc_nova_full_v1_nue2027
+\end{verbatim}}
+and for numu:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R25-06-04-prod6.f_nd_genie_N2420i0211b_nonswap_fhc_nova_full_v1_numu2027
+prod_sumdecaf_R25-06-04-prod6.f_nd_genie_N2420i0211b_nonswap_rhc_nova_full_v1_numu2027
+\end{verbatim}}
+which are based on parent CAFs:
+{\smaller\begin{verbatim}
+prod_caf_R25-06-04-prod6.f_nd_genie_nonswap_fhc_nominal_Prod6_official
+prod_caf_R25-06-04-prod6.f_nd_genie_nonswap_rhc_nominal_Prod6_official
+\end{verbatim}}
+
+\subsection{ND NuMI data datasets}
+The \texttt{v1} (most recent) concats are for nue:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R25-06-04-prod6.abd_nd_numi_data_fhc_full_v1_nue2027
+prod_sumdecaf_R25-06-04-prod6.abd_nd_numi_data_rhc_full_v1_nue2027
+\end{verbatim}}
+and for numu:
+{\smaller\begin{verbatim}
+prod_sumdecaf_R25-06-04-prod6.abd_nd_numi_data_fhc_full_v1_numu2027
+prod_sumdecaf_R25-06-04-prod6.abd_nd_numi_data_rhc_full_v1_numu2027
+\end{verbatim}}
+which are based on parent CAFs:
+{\smaller\begin{verbatim}
+prod_caf_R25-06-04-prod6.abd_nd_numi_data_fhc_full_v1_Prod6_official
+prod_caf_R25-06-04-prod6.abd_nd_numi_data_rhc_full_v1_Prod6_official
+\end{verbatim}}
+
+\todo[inline]{WARNING: THESE v1 ND DATA CAFS DO NOT HAVE GOODRUNS APPLIED AND NEED TO BE RESPUN!}
+
+\newpage
+
+\section{Closure tests (validation plots)}
+
+\subsection{FD MC numu}
+These plots demonstrate that non/flux/tau-swap files agree between numu concats and CAFs.
+\begin{figure}[h]
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_fdNumuEhadQuants_OfficialFD_fdProd6EffMatch_nom/FD_Numu_fhc_EhadQuant_1_ratio.png}
+\end{minipage}
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_fdNumuEhadQuants_OfficialFD_fdProd6EffMatch_nom/FD_Numu_fhc_EhadQuant_2_ratio.png}
+\end{minipage}
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_fdNumuEhadQuants_OfficialFD_fdProd6EffMatch_nom/FD_Numu_fhc_EhadQuant_3_ratio.png}
+\end{minipage}
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_fdNumuEhadQuants_OfficialFD_fdProd6EffMatch_nom/FD_Numu_fhc_EhadQuant_4_ratio.png}
+\end{minipage}
+\caption{\texttt{v1} concat-CAF validation for FHC numu FD samples using the prod5.1 spline energy estimator and prod5.1 selections minimally modified to work on prod6.}
+\end{figure}
+
+\begin{figure}[h]
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_fdNumuEhadQuants_OfficialFD_fdProd6EffMatch_nom/FD_Numu_rhc_EhadQuant_1_ratio.png}
+\end{minipage}
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_fdNumuEhadQuants_OfficialFD_fdProd6EffMatch_nom/FD_Numu_rhc_EhadQuant_2_ratio.png}
+\end{minipage}
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_fdNumuEhadQuants_OfficialFD_fdProd6EffMatch_nom/FD_Numu_rhc_EhadQuant_3_ratio.png}
+\end{minipage}
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_fdNumuEhadQuants_OfficialFD_fdProd6EffMatch_nom/FD_Numu_rhc_EhadQuant_4_ratio.png}
+\end{minipage}
+\caption{\texttt{v1} concat-CAF validation for RHC numu FD samples using the prod5.1 spline energy estimator and prod5.1 selections minimally modified to work on prod6.}
+\end{figure}
+
+\subsection{FD MC nue}
+These plots demonstrate that non/flux/tau-swap files agree between nue concats and CAFs.
+\begin{figure}[h]
+\begin{minipage}{0.32\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_fdNue_OfficialFD_fdProd6EffMatch_nom/FD_NueHighPID_fhc_ratio.png}
+\end{minipage}
+\begin{minipage}{0.32\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_fdNue_OfficialFD_fdProd6EffMatch_nom/FD_NueLowPID_fhc_ratio.png}
+\end{minipage}
+\begin{minipage}{0.32\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_fdNue_OfficialFD_fdProd6EffMatch_nom/FD_NuePeripheral_fhc_ratio.png}
+\end{minipage}
+\caption{\texttt{v1} concat-CAF validation for FHC nue FD samples using the prod5.1 nue energy estimator and prod5.1 selections minimally modified to work on prod6.}
+\end{figure}
+
+\begin{figure}[h]
+\begin{minipage}{0.32\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_fdNue_OfficialFD_fdProd6EffMatch_nom/FD_NueHighPID_rhc_ratio.png}
+\end{minipage}
+\begin{minipage}{0.32\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_fdNue_OfficialFD_fdProd6EffMatch_nom/FD_NueLowPID_rhc_ratio.png}
+\end{minipage}
+\begin{minipage}{0.32\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_fdNue_OfficialFD_fdProd6EffMatch_nom/FD_NuePeripheral_rhc_ratio.png}
+\end{minipage}
+\caption{\texttt{v1} concat-CAF validation for RHC nue FD samples using the prod5.1 nue energy estimator and prod5.1 selections minimally modified to work on prod6.}
+\end{figure}
+
+\todo[inline]{We have not yet validated the low energy nue sample.}
+
+\subsection{FD cosmic numu}
+These plots demonstrate that cosmic data files agree between numu concats and CAFs.
+
+\todo[inline]{Cosmic concats do not yet exist.}
+
+\subsection{FD cosmic nue}
+These plots demonstrate that cosmic data files agree between nue concats and CAFs.
+
+\todo[inline]{Cosmic concats do not yet exist.}
+
+\subsection{ND MC numu}
+These plots demonstrate that ND MC files agree between numu concats and CAFs.
+\begin{figure}[h]
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuEhadQuants_NuEnergyND_ndTnsCVNEffMatch_nom/ND_Numu_fhc_EhadQuant_1_ratio.png}
+\end{minipage}
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuEhadQuants_NuEnergyND_ndTnsCVNEffMatch_nom/ND_Numu_fhc_EhadQuant_2_ratio.png}
+\end{minipage}
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuEhadQuants_NuEnergyND_ndTnsCVNEffMatch_nom/ND_Numu_fhc_EhadQuant_3_ratio.png}
+\end{minipage}
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuEhadQuants_NuEnergyND_ndTnsCVNEffMatch_nom/ND_Numu_fhc_EhadQuant_4_ratio.png}
+\end{minipage}
+\caption{\texttt{v1} concat-CAF validation for FHC numu ND samples in reconstructed neutrino energy space using the prod5.1 spline energy estimator and prod5.1 selections minimally modified to work on prod6.}
+\end{figure}
+
+\begin{figure}[h]
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuEhadQuants_NuEnergyND_ndTnsCVNEffMatch_nom/ND_Numu_rhc_EhadQuant_1_ratio.png}
+\end{minipage}
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuEhadQuants_NuEnergyND_ndTnsCVNEffMatch_nom/ND_Numu_rhc_EhadQuant_2_ratio.png}
+\end{minipage}
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuEhadQuants_NuEnergyND_ndTnsCVNEffMatch_nom/ND_Numu_rhc_EhadQuant_3_ratio.png}
+\end{minipage}
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuEhadQuants_NuEnergyND_ndTnsCVNEffMatch_nom/ND_Numu_rhc_EhadQuant_4_ratio.png}
+\end{minipage}
+\caption{\texttt{v1} concat-CAF validation for RHC numu ND samples in reconstructed neutrino energy space using the prod5.1 spline energy estimator and prod5.1 selections minimally modified to work on prod6.}
+\end{figure}
+
+\begin{figure}[h]
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_Muon_fhc_concat.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_MuPr_fhc_concat.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_MuPrEtc_fhc_concat.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_MuPiEtc_fhc_concat.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_EvElse_fhc_concat.png}
+\end{minipage}
+\caption{\texttt{v1} concat-loaded FHC numu ND samples in topological space using prod5.1 reconstruction minimally modified to work on prod6. \textbf{Topologies left to right:} \texttt{Muon}, \texttt{MuPr}, \texttt{MuPrEtc}, \texttt{MuPiEtc}, \texttt{EvElse}.}
+\end{figure}
+
+\begin{figure}[h]
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_Muon_rhc_concat.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_MuPr_rhc_concat.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_MuEtc_rhc_concat.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_MuPiEtc_rhc_concat.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_EvElse_rhc_concat.png}
+\end{minipage}
+\caption{\texttt{v1} concat-loaded RHC numu ND samples in topological space using prod5.1 reconstruction minimally modified to work on prod6. \textbf{Topologies left to right:} \texttt{Muon}, \texttt{MuPr}, \texttt{MuEtc}, \texttt{MuPiEtc}, \texttt{EvElse}.}
+\end{figure}
+
+\begin{figure}[h]
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_Muon_fhc_ratio.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_MuPr_fhc_ratio.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_MuPrEtc_fhc_ratio.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_MuPiEtc_fhc_ratio.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_EvElse_fhc_ratio.png}
+\end{minipage}
+\caption{\texttt{v1} ratio of concat-loaded FHC numu ND samples with CAFs in topological space using prod5.1 reconstruction minimally modified to work on prod6. \textbf{Topologies left to right:} \texttt{Muon}, \texttt{MuPr}, \texttt{MuPrEtc}, \texttt{MuPiEtc}, \texttt{EvElse}.}
+\end{figure}
+
+\begin{figure}[h]
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_Muon_rhc_ratio.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_MuPr_rhc_ratio.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_MuEtc_rhc_ratio.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_MuPiEtc_rhc_ratio.png}
+\end{minipage}
+\begin{minipage}{0.19\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNumuTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_EvElse_rhc_ratio.png}
+\end{minipage}
+\caption{\texttt{v1} ratio of concat-loaded RHC numu ND samples with CAFs in topological space using prod5.1 reconstruction minimally modified to work on prod6. \textbf{Topologies left to right:} \texttt{Muon}, \texttt{MuPr}, \texttt{MuEtc}, \texttt{MuPiEtc}, \texttt{EvElse}.}
+\end{figure}
+
+\subsection{ND MC nue}
+These plots demonstrate that ND MC files agree between nue concats and CAFs.
+\todo[inline]{Do we need closure tests for BEN decomp here? We need a BEN decomp expert to address this.}
+\todo[inline]{We should load these in reconstructed nue energy (high pid and low pid) space.}
+\begin{figure}[h]
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNueTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_Nue_fhc_concat.png}
+\end{minipage}
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNueTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_Nue_fhc_ratio.png}
+\end{minipage}
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNueTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_Nue_rhc_concat.png}
+\end{minipage}
+\begin{minipage}{0.24\linewidth}
+\includegraphics[width=\linewidth]{concat_validation/prod6_ndNueTopological_Q3Q0_ndTnsCVNEffMatch_nom/ND_Nue_rhc_ratio.png}
+\end{minipage}
+\caption{\texttt{v1} nue ND samples in topological space using prod5.1 reconstruction minimally modified to work on prod6. \textbf{Left to right:} Nue FHC loaded from the concat, ratio of Nue FHC concat/CAF, Nue RHC loaded from the concat, ratio of Nue RHC concat/caf.}
+\end{figure}
+
+\subsection{ND NuMI data numu}
+These plots demonstrate that ND NuMI data files agree between numu concats and CAFs.
+\todo[inline]{These validations have not yet been done.}
+
+\subsection{ND NuMI data nue}
+These plots demonstrate that ND NuMI data files agree between nue concats and CAFs.
+\todo[inline]{Do we need closure tests for BEN decomp here? We need a BEN decomp expert to address this.}
+\todo[inline]{These validations have not yet been done.}
+
+\section{References}
+\printbibliography
+
+\end{document}
