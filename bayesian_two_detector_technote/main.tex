@@ -15,7 +15,7 @@
 \addbibresource{references.bib}
 
 \title{Technote: Bayesian two-detector inference}
-\author{Cullen Sullivan}
+\author{Cullen Sullivan, Hugh Gallagher, Jeremy Wolcott}
 \date{\today}
 
 \linenumbers
@@ -27,6 +27,10 @@
 \renewcommand{\th}[1]{\ensuremath{\theta_{#1}}\xspace}
 
 \maketitle
+
+\begin{abstract}
+  We present an update of the Bayesian two-detector technique and evaluate its performance in the best case using prod5.1 MC. We intend to deploy the Baysian two-detector method as a parallel inference technique to extrapolation in the next 3F analysis with the full NOvA dataset on prod6 with no cross section CV tune. The two-detector technique uses Stan HMC to simulateously constrain systematic and oscillation parameters using non-extrapolated FD samples and ND sub-samples. We discuss the implementation of the two-detector method and how we have made it computationally tractable plus step-by-step instructions on how to perform an analysis. The technote reproduces the 3F Ana2024 analysis using fake data well enough to benchmark the performance of two-detector inference. With in-systematic-model fake data studies, we estimate that in the best case (a systematic model that can perfectly describe NOvA data), that two-detector inference can achieve a 15\% stronger constraint on \dmsq{32}. Although an improvement in constraint this large on real NOvA data is unlikely, this strongly motivates the collaboration to make the systematic model as (sensibly) predictive as possible.
+\end{abstract}
 
 \section{Introduction}
 Past NOvA 3F oscillation analyses use the extrapolation technique to use both the ND and the FD for constraining oscillation parameters. FD simulation is corrected using measured discrepancies between simulation and data at the ND. Extrapolation is effective at removing the effects of "unknown unknowns" from the oscillation measurement - the functionally identical nature of the ND and the FD allow for cancellation of out-of-model variations in the real ND and FD data. This means that an incomplete systematic model can still get the correct answer for an oscillation measurement. However, extrapolation leaves some constraining power of the ND on the table. Figure \ref{fig:extrapolation_integral_errors} illustrates this. Although these plots show uncertainties on the integrals of FD samples, not uncertainties on fit parameters, they demonstrate the performance of extrapolation. Generally speaking, extrapolation effectively reduces the effects of systematic uncertainties from physics that's the same between detectors like the character of the beam and neutrino cross sections with detector mass. Extrapolation, however, tends to \textit{increase} uncertainties with physics that could be different between the detectors like how they are calibrated. Also, extrapolation struggles to constrain systematic parameters that are highly correlated with oscillation parameters. For example, uncertainty in reconstructing muon energy is highly correlated with \dmsq{32}. Extrapolation only reduces the effect of these uncertainties at the FD but has no explicit mechanism to disambiguate their variations with shifts in \dmsq{32}, effectively leaving precision on the table.
